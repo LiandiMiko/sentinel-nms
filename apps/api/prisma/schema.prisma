@@ -1,0 +1,22 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Device {
+  id          String   @id @default(cuid())
+  name        String
+  ipAddress   String   @unique
+  snmpPort    Int      @default(161)
+  snmpVersion String   @default("2c")
+  community   String
+  apiPort     Int      @default(8728)
+  username    String?
+  password    String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

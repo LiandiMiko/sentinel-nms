@@ -1,0 +1,13 @@
+{
+  "name": "sentinel-nms",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "api": "npm run dev --workspace=api",
+    "collector": "npm run dev --workspace=collector",
+    "scheduler": "npm run dev --workspace=scheduler"
+  }
+}
