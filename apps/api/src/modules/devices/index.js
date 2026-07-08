@@ -1,0 +1,1 @@
+export { default as deviceRoutes } from "./device.routes.js";

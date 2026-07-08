@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model Device {
@@ -19,4 +20,17 @@ model Device {
   enabled     Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  
+  metrics Metric[]
+}
+
+model Metric {
+  id         String   @id @default(cuid())
+  deviceId   String
+  oid        String
+  name       String
+  value      String
+  unit       String?
+  createdAt  DateTime @default(now())
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 }

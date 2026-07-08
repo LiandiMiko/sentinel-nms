@@ -1,0 +1,1 @@
+export { default as metricRoutes } from "./metric.routes.js";
