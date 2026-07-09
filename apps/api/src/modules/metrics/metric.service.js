@@ -100,6 +100,16 @@ class MetricService {
             results
         };
     }
+
+    async getHistory(deviceId, metricName, limit = 100) {
+        const history = await metricRepository.findHistory(
+            deviceId,
+            metricName,
+            Number(limit)
+        );
+
+        return history.reverse();
+    }
 }
 
 export default new MetricService();

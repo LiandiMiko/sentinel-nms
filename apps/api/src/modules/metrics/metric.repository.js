@@ -8,6 +8,18 @@ class MetricRepository {
         });
     }
 
+    async findHistory(deviceId, name, limit = 100) {
+        return prisma.metric.findMany({
+            where: {
+                deviceId,
+                name
+            },
+            orderBy: {
+                createdAt: "desc"
+            },
+            take: limit
+        });
+    }
 }
 
 export default new MetricRepository();
