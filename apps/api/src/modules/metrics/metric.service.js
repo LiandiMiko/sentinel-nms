@@ -1,85 +1,105 @@
 import snmp from "net-snmp";
+import { OID } from "../../core/snmp/oid.js";
+import { createSession } from "../../core/snmp/session.js";
 import deviceRepository from "../devices/device.repository.js";
 import metricRepository from "./metric.repository.js";
 
-const OIDS = {
-    hostname: "1.3.6.1.2.1.1.5.0",
-    uptime: "1.3.6.1.2.1.1.3.0"
+const POLLED_OIDS = [
+    {
+        oid: OID.sysName,
+        name: "hostname"
+    },
+    {
+        oid: OID.sysUpTime,
+        name: "uptime"
+    }
+];
+
+const normalizeValue = (value) => {
+    if (Buffer.isBuffer(value)) {
+        return value.toString();
+    }
+
+    return String(value);
 };
 
 class MetricService {
+    async pollDevice(device) {
+        const varbinds = await this.getVarbinds(device);
+        const metrics = [];
 
-async pollDevice(device) {
-
-    return new Promise((resolve, reject) => {
-
-        const session = snmp.createSession(
-            device.ipAddress,
-            device.community,
-            {
-                port: device.snmpPort,
-                timeout: 3000
+        for (const [index, varbind] of varbinds.entries()) {
+            if (snmp.isVarbindError(varbind)) {
+                throw new Error(snmp.varbindError(varbind));
             }
-        );
 
-        session.get(
-            [OIDS.hostname, OIDS.uptime],
-            async (err, varbinds) => {
+            const metricDefinition = POLLED_OIDS[index];
+            const metric = await metricRepository.create({
+                deviceId: device.id,
+                oid: metricDefinition.oid,
+                name: metricDefinition.name,
+                value: normalizeValue(varbind.value)
+            });
 
+            metrics.push(metric);
+        }
+
+        return {
+            deviceId: device.id,
+            deviceName: device.name,
+            ipAddress: device.ipAddress,
+            status: "up",
+            metrics
+        };
+    }
+
+    async getVarbinds(device) {
+        return new Promise((resolve, reject) => {
+            const session = createSession(
+                device.ipAddress,
+                device.community,
+                device.snmpPort
+            );
+
+            session.get(POLLED_OIDS.map((metric) => metric.oid), (err, varbinds) => {
                 session.close();
 
                 if (err) {
-                    return reject(err);
+                    reject(err);
+                    return;
                 }
 
-                const hostname = varbinds[0].value.toString();
-const uptime = Number(varbinds[1].value);
-
-// Simpan hostname
-await metricRepository.create({
-    deviceId: device.id,
-    oid: OIDS.hostname,
-    name: "hostname",
-    value: hostname
-});
-
-// Simpan uptime
-await metricRepository.create({
-    deviceId: device.id,
-    oid: OIDS.uptime,
-    name: "uptime",
-    value: uptime.toString()
-});
-
-resolve({
-    hostname,
-    uptime
-});
-
-            }
-        );
-
-    });
-
-}
-
-async pollAll() {
-
-    const devices = await deviceRepository.findAll();
-
-    const results = [];
-
-    for (const device of devices) {
-
-        const metric = await this.pollDevice(device);
-
-        results.push(metric);
-
+                resolve(varbinds);
+            });
+        });
     }
 
-    return results;
+    async pollAll() {
+        const devices = await deviceRepository.findEnabled();
+        const results = [];
 
-}
+        for (const device of devices) {
+            try {
+                const result = await this.pollDevice(device);
+                results.push(result);
+            } catch (err) {
+                results.push({
+                    deviceId: device.id,
+                    deviceName: device.name,
+                    ipAddress: device.ipAddress,
+                    status: "down",
+                    error: err.message
+                });
+            }
+        }
+
+        return {
+            total: devices.length,
+            up: results.filter((result) => result.status === "up").length,
+            down: results.filter((result) => result.status === "down").length,
+            results
+        };
+    }
 }
 
 export default new MetricService();

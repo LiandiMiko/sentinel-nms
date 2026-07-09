@@ -1,24 +1,13 @@
 import { Router } from "express";
+import { asyncHandler } from "../../core/middleware/async-handler.js";
 import controller from "./device.controller.js";
-
-console.log("✅ Device routes loaded");
 
 const router = Router();
 
-router.get("/", (req, res, next) => {
-    console.log("GET /devices hit");
-    next();
-}, controller.findAll);
-
-router.post("/", controller.create);
-
-console.log("===== DEVICE ROUTES =====");
-
-router.stack.forEach((layer) => {
-    console.log(
-        layer.route?.path,
-        Object.keys(layer.route?.methods || {})
-    );
-});
+router.get("/", asyncHandler(controller.findAll));
+router.get("/:id", asyncHandler(controller.findById));
+router.post("/", asyncHandler(controller.create));
+router.patch("/:id", asyncHandler(controller.update));
+router.delete("/:id", asyncHandler(controller.delete));
 
 export default router;

@@ -18,6 +18,9 @@ model Device {
   username    String?
   password    String?
   enabled     Boolean  @default(true)
+  status      String   @default("unknown")
+  lastSeen    DateTime?
+  lastError   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   

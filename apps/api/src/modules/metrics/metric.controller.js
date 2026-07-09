@@ -1,19 +1,12 @@
 import service from "./metric.service.js";
-
-console.log("METRIC CONTROLLER LOADED");
+import { success } from "../../core/response/response.js";
 
 class MetricController {
-
     async poll(req, res) {
+        const result = await service.pollAll();
 
-    console.log("==== CONTROLLER ====");
-
-    const result = await service.pollAll();
-
-    res.json(result);
-
-}
-
+        return success(res, result, "Metrics polled successfully");
+    }
 }
 
 export default new MetricController();

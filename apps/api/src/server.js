@@ -3,26 +3,20 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
+import { errorHandler } from "./core/middleware/error-handler.js";
+import { notFoundHandler } from "./core/middleware/not-found-handler.js";
 import deviceRoutes from "./modules/devices/device.routes.js";
 import metricRoutes from "./modules/metrics/metric.routes.js";
-import { metricRoutes } from "./modules/metrics/index.js";
-
-console.log("cwd =", process.cwd());
-console.log("env =", process.env.DATABASE_URL);
 
 dotenv.config();
 
 const app = express();
 
-app.use((req, res, next) => {
-    console.log(req.method, req.url);
-    next();
-});
-
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
+
 app.use("/api/v1/devices", deviceRoutes);
 app.use("/api/v1/metrics", metricRoutes);
 
@@ -35,6 +29,9 @@ app.get("/api/v1/health", (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
+
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
 
@@ -49,13 +46,11 @@ process.on("unhandledRejection", (err) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`
-======================================
-🛡 Sentinel NMS API
-======================================
-Status : Running
-Port   : ${PORT}
-Mode   : ${process.env.NODE_ENV || "development"}
-======================================
-`);
+    console.log("\n======================================");
+    console.log("Sentinel NMS API");
+    console.log("======================================");
+    console.log("Status : Running");
+    console.log("Port   : " + PORT);
+    console.log("Mode   : " + (process.env.NODE_ENV || "development"));
+    console.log("======================================\n");
 });
