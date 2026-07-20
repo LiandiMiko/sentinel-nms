@@ -8,6 +8,8 @@ import { notFoundHandler } from "./core/middleware/not-found-handler.js";
 import deviceRoutes from "./modules/devices/device.routes.js";
 import metricRoutes from "./modules/metrics/metric.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
+import schedulerService from "./modules/scheduler/scheduler.service.js";
+
 
 dotenv.config();
 
@@ -35,6 +37,7 @@ app.get("/api/v1/health", (req, res) => {
 
 app.use(notFoundHandler);
 app.use(errorHandler);
+schedulerService.start();
 
 const PORT = process.env.PORT || 3000;
 

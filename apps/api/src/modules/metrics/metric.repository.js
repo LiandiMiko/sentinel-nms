@@ -20,6 +20,18 @@ class MetricRepository {
             take: limit
         });
     }
+
+    async count() {
+    return prisma.metric.count();
+}
+
+    async latestMetric() {
+        return prisma.metric.findFirst({
+            orderBy: {
+                createdAt: "desc"
+            }
+        });
+    }
 }
 
 export default new MetricRepository();

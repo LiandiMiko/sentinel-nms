@@ -81,7 +81,41 @@ class DeviceRepository {
             }
         });
     }
+    
+    async countAll() {
+    return prisma.device.count();
+}
 
+async countUp() {
+    const threshold = new Date(Date.now() - 30000);
+
+    return prisma.device.count({
+        where: {
+            lastSeen: {
+                gte: threshold
+            }
+        }
+    });
+}
+
+async countDown() {
+    const threshold = new Date(Date.now() - 30000);
+
+    return prisma.device.count({
+        where: {
+            OR: [
+                {
+                    lastSeen: null
+                },
+                {
+                    lastSeen: {
+                        lt: threshold
+                    }
+                }
+            ]
+        }
+    });
+}
 }
 
 export default new DeviceRepository();

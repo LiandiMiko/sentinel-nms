@@ -47,9 +47,7 @@ class MetricService {
 
             metrics.push(metric);
         }
-            console.log("Calling updateLastSeen...");
             await deviceRepository.updateLastSeen(device.id);
-            console.log("updateLastSeen finished");
 
         return {
             deviceId: device.id,
@@ -67,9 +65,6 @@ class MetricService {
                 device.community,
                 device.snmpPort
             );
-
-            console.log(POLLED_OIDS);
-            console.log(POLLED_OIDS.map(metric => metric.oid));
 
             session.get(POLLED_OIDS.map((metric) => metric.oid), (err, varbinds) => {
                 session.close();

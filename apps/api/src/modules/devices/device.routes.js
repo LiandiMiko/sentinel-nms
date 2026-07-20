@@ -10,4 +10,5 @@ router.post("/", asyncHandler(controller.create));
 router.patch("/:id", asyncHandler(controller.update));
 router.delete("/:id", asyncHandler(controller.delete));
 
+
 export default router;

@@ -1,4 +1,5 @@
 import deviceRepository from "../devices/device.repository.js";
+import metricRepository from "../metrics/metric.repository.js";
 
 class DashboardService {
     async devices() {
@@ -29,6 +30,31 @@ const status =
             };
         });
     }
+
+    async summary() {
+
+    const [
+        totalDevices,
+        upDevices,
+        downDevices,
+        totalMetrics,
+        latestMetric
+    ] = await Promise.all([
+        deviceRepository.countAll(),
+        deviceRepository.countUp(),
+        deviceRepository.countDown(),
+        metricRepository.count(),
+        metricRepository.latestMetric()
+    ]);
+
+    return {
+        totalDevices,
+        upDevices,
+        downDevices,
+        totalMetrics,
+        lastPolling: latestMetric?.createdAt ?? null
+    };
+}
 }
 
 export default new DashboardService();

@@ -9,4 +9,10 @@ router.get(
     asyncHandler(controller.devices.bind(controller))
 );
 
+router.get(
+    "/summary",
+    asyncHandler(controller.summary.bind(controller))
+);
+
+
 export default router;
