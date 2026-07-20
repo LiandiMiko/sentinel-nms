@@ -8,6 +8,8 @@ export const OID = {
 
     sysContact: "1.3.6.1.2.1.1.4.0",
 
-    sysLocation: "1.3.6.1.2.1.1.6.0"
+    sysLocation: "1.3.6.1.2.1.1.6.0",
+
+    cpuLoad: "1.3.6.1.4.1.14988.1.1.3.10.0",
 
 };

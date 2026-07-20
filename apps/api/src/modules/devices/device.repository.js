@@ -58,6 +58,30 @@ class DeviceRepository {
             }
         });
     }
+    async updateLastSeen(id) {
+    return prisma.device.update({
+        where: { id },
+        data: {
+            lastSeen: new Date()
+        }
+    });
+}
+    async findAllWithMetrics() {
+        return prisma.device.findMany({
+            include: {
+                metrics: {
+                    orderBy: {
+                        createdAt: "desc"
+                    },
+                    take: 2
+                }
+            },
+            orderBy: {
+                name: "asc"
+            }
+        });
+    }
+
 }
 
 export default new DeviceRepository();

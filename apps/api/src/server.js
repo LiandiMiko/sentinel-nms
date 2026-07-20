@@ -7,6 +7,7 @@ import { errorHandler } from "./core/middleware/error-handler.js";
 import { notFoundHandler } from "./core/middleware/not-found-handler.js";
 import deviceRoutes from "./modules/devices/device.routes.js";
 import metricRoutes from "./modules/metrics/metric.routes.js";
+import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 
 dotenv.config();
 
@@ -17,8 +18,10 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
 
+
 app.use("/api/v1/devices", deviceRoutes);
 app.use("/api/v1/metrics", metricRoutes);
+app.use("/api/v1/dashboard", dashboardRoutes);
 
 app.get("/api/v1/health", (req, res) => {
     res.status(200).json({
