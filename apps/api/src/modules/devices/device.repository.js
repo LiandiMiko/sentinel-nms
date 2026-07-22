@@ -67,20 +67,15 @@ class DeviceRepository {
     });
 }
     async findAllWithMetrics() {
-        return prisma.device.findMany({
-            include: {
-                metrics: {
-                    orderBy: {
-                        createdAt: "desc"
-                    },
-                    take: 2
-                }
-            },
-            orderBy: {
-                name: "asc"
-            }
-        });
-    }
+    return prisma.device.findMany({
+        include: {
+            snapshot: true
+        },
+        orderBy: {
+            name: "asc"
+        }
+    });
+}
     
     async countAll() {
     return prisma.device.count();
@@ -115,6 +110,31 @@ async countDown() {
             ]
         }
     });
+}
+
+async updateSnapshot(deviceId, data) {
+    return prisma.deviceSnapshot.upsert({
+        where: {
+            deviceId
+        },
+        update: {
+            hostname: data.hostname,
+            uptime: data.uptime,
+            cpu: data.cpu,
+            lastSeen: new Date()
+        },
+        create: {
+            deviceId,
+            hostname: data.hostname,
+            uptime: data.uptime,
+            cpu: data.cpu,
+            lastSeen: new Date()
+        }
+    });
+}
+
+async countMetrics() {
+    return prisma.metric.count();
 }
 }
 

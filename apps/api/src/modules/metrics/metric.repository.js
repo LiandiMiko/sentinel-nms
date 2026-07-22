@@ -8,11 +8,11 @@ class MetricRepository {
         });
     }
 
-    async findHistory(deviceId, name, limit = 100) {
+    async findHistory(deviceId, metricName, limit) {
         return prisma.metric.findMany({
             where: {
                 deviceId,
-                name
+                name: metricName
             },
             orderBy: {
                 createdAt: "desc"
@@ -21,17 +21,35 @@ class MetricRepository {
         });
     }
 
-    async count() {
-    return prisma.metric.count();
-}
-
-    async latestMetric() {
-        return prisma.metric.findFirst({
-            orderBy: {
-                createdAt: "desc"
-            }
+    async upsertSnapshot(data) {
+        return prisma.deviceSnapshot.upsert({
+            where: {
+                deviceId: data.deviceId
+            },
+            update: {
+                hostname: data.hostname,
+                uptime: data.uptime,
+                cpu: data.cpu,
+                lastSeen: data.lastSeen
+            },
+            create: data
         });
     }
+    
+    async latest(deviceId, limit = 50) {
+
+        return prisma.metric.findMany({
+            where: {
+                deviceId
+            },
+            orderBy: {
+                createdAt: "desc"
+            },
+            take: limit
+        });
+
+    }
+
 }
 
 export default new MetricRepository();

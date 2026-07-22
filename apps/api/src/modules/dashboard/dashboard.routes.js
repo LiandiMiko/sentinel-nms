@@ -14,5 +14,9 @@ router.get(
     asyncHandler(controller.summary.bind(controller))
 );
 
+router.get(
+    "/devices/:id",
+    asyncHandler(controller.getDevice.bind(controller))
+);
 
 export default router;

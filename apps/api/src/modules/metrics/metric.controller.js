@@ -14,20 +14,21 @@ class MetricController {
     }
 
     async history(req, res) {
-        const { deviceId, metric } = req.params;
-        const { limit = 100 } = req.query;
+        const { id } = req.params;
+        const { name = "cpu", limit = 100 } = req.query;
 
-        const history = await metricService.getHistory(
-            deviceId,
-            metric,
+        const data = await metricService.getHistory(
+            id,
+            name,
             limit
         );
 
         res.json({
             success: true,
-            data: history
+            data
         });
     }
+
 }
 
 export default new MetricController();

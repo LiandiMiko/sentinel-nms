@@ -1,4 +1,5 @@
 import dashboardService from "./dashboard.service.js";
+import { success } from "../../core/response/response.js";
 
 class DashboardController {
 
@@ -22,6 +23,12 @@ class DashboardController {
         data
     });
 
+}
+
+    async getDevice(req, res) {
+    const data = await dashboardService.getDevice(req.params.id);
+
+    return success(res, data);
 }
 
 }

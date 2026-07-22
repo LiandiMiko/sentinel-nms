@@ -10,7 +10,6 @@ import metricRoutes from "./modules/metrics/metric.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import schedulerService from "./modules/scheduler/scheduler.service.js";
 
-
 dotenv.config();
 
 const app = express();
@@ -24,6 +23,7 @@ app.use(morgan("dev"));
 app.use("/api/v1/devices", deviceRoutes);
 app.use("/api/v1/metrics", metricRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
+
 
 app.get("/api/v1/health", (req, res) => {
     res.status(200).json({

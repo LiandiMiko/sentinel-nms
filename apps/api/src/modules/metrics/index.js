@@ -1,1 +1,3 @@
-export { default as metricRoutes } from "./metric.routes.js";
+import routes from "./metric.routes.js";
+
+export default routes;

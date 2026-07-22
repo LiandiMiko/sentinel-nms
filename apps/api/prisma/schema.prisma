@@ -25,6 +25,7 @@ model Device {
   updatedAt   DateTime @updatedAt
 
   metrics Metric[]
+  snapshot  DeviceSnapshot?
 }
 
 model Metric {
@@ -38,3 +39,16 @@ model Metric {
   device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 }
 
+model DeviceSnapshot {
+  id         String   @id @default(cuid())
+
+  deviceId   String   @unique
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  hostname   String?
+  uptime     String?
+  cpu        String?
+
+  lastSeen   DateTime
+  updatedAt  DateTime @updatedAt
+}

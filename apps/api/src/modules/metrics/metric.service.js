@@ -47,8 +47,19 @@ class MetricService {
 
             metrics.push(metric);
         }
-            await deviceRepository.updateLastSeen(device.id);
+           const snapshot = {};
 
+        for (const metric of metrics) {
+            snapshot[metric.name] = metric.value;
+}
+
+        await metricRepository.upsertSnapshot({
+            deviceId: device.id,
+            hostname: snapshot.hostname,
+            uptime: snapshot.uptime,
+            cpu: snapshot.cpu,
+            lastSeen: new Date()
+});
         return {
             deviceId: device.id,
             deviceName: device.name,
