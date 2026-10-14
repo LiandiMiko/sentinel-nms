@@ -12,6 +12,7 @@ export default function Users() {
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
     const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     const loadUsers = useCallback(async () => {
         try {
@@ -19,13 +20,24 @@ export default function Users() {
             setUsers(data.data);
         } catch (requestError) {
             setError(requestError.response?.data?.message ?? "Could not load users.");
+        } finally {
+            setLoading(false);
         }
     }, []);
 
     useEffect(() => {
+        let active = true;
         api.get("/users")
-            .then(({ data }) => setUsers(data.data))
-            .catch((requestError) => setError(requestError.response?.data?.message ?? "Could not load users."));
+            .then(({ data }) => {
+                if (active) setUsers(data.data);
+            })
+            .catch((requestError) => {
+                if (active) setError(requestError.response?.data?.message ?? "Could not load users.");
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+        return () => { active = false; };
     }, []);
 
     async function createUser(event) {
@@ -37,6 +49,7 @@ export default function Users() {
             await api.post("/users", form);
             setForm({ email: "", password: "", role: "VIEWER" });
             setMessage("User created.");
+            setLoading(true);
             await loadUsers();
         } catch (requestError) {
             setError(requestError.response?.data?.message ?? "Could not create user.");
@@ -49,6 +62,7 @@ export default function Users() {
         setError("");
         try {
             await api.patch(`/users/${account.id}`, { enabled: !account.enabled });
+            setLoading(true);
             await loadUsers();
         } catch (requestError) {
             setError(requestError.response?.data?.message ?? "Could not update user.");
@@ -61,6 +75,7 @@ export default function Users() {
         try {
             await api.delete(`/users/${account.id}`);
             setMessage("User deleted.");
+            setLoading(true);
             await loadUsers();
         } catch (requestError) {
             setError(requestError.response?.data?.message ?? "Could not delete user.");
@@ -78,6 +93,7 @@ export default function Users() {
                 <Link to="/reports" className="side-link"><FileBarChart size={17} />Reports</Link>
                 <Link to="/settings" className="side-link"><Settings size={17} />Settings</Link>
                 <Link to="/users" className="side-link active"><Shield size={17} />Users</Link>
+                <Link to="/audit-log" className="side-link"><Activity size={17} />Audit log</Link>
             </aside>
             <section className="main-panel">
                 <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>User management</strong></div><AccountMenu /></header>
@@ -107,7 +123,7 @@ export default function Users() {
                                     {account.role !== "SUPER_ADMIN" && account.id !== user.id && <button className="icon-button danger-hover" type="button" title={`Delete ${account.email}`} onClick={() => deleteUser(account)}><Trash2 size={15} /></button>}
                                 </div></td>
                             </tr>)}
-                            {!users.length && <tr><td colSpan="5" className="table-empty">No user accounts yet.</td></tr>}
+                            {!users.length && <tr><td colSpan="5" className="table-empty">{loading ? "Loading user accounts..." : "No user accounts yet."}</td></tr>}
                         </tbody></table></div>
                     </section>
                 </div>

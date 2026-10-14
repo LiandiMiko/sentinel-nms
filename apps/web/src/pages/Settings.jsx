@@ -33,8 +33,10 @@ export default function Settings() {
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
     const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     const load = useCallback(async () => {
+        setLoading(true);
         try {
             const [settingsData, groupData, channelData] = await Promise.all([
                 getSettings(),
@@ -48,6 +50,8 @@ export default function Settings() {
             setError("");
         } catch (requestError) {
             setError(requestError.response?.data?.message ?? "Could not load system settings.");
+        } finally {
+            setLoading(false);
         }
     }, []);
 
@@ -168,6 +172,7 @@ export default function Settings() {
                     <div className="page-heading"><div><span className="eyebrow">SYSTEM CONFIGURATION</span><h1>Settings</h1><p>Manage polling, history retention, notification channels, and device groups.</p></div></div>
                     {error && <div className="notice-error" role="alert">{error}</div>}
                     {message && <div className="notice-success" role="status"><Check size={16} />{message}</div>}
+                    {loading && <div className="loading-inline" role="status">Loading settings, groups, and notification channels...</div>}
                     {settings && <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">MONITORING</span><h2>Polling & data retention</h2></div></div>
                         {canChangeSystemSettings ? <form className="settings-form" onSubmit={saveSettings}>
@@ -180,12 +185,12 @@ export default function Settings() {
                     <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">ORGANIZATION</span><h2>Device groups</h2></div></div>
                         {canManage && <form className="inline-form" onSubmit={addGroup}><input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength="40" placeholder="New group name" required /><button className="button button-primary" type="submit"><CirclePlus size={16} />Add group</button></form>}
-                        <div className="group-list">{groups.map((group) => <div className="group-row" key={group.id}><span className="group-avatar"><Router size={16} /></span><span className="group-name">{group.name}<small>{group._count.devices} devices</small></span>{canManage && <button className="icon-button danger-hover" title="Delete group" onClick={() => removeGroup(group)}><Trash2 size={15} /></button>}</div>)}{groups.length === 0 && <p className="table-empty">No groups yet. Add a group, then assign devices from the device editor.</p>}</div>
+                        <div className="group-list">{groups.map((group) => <div className="group-row" key={group.id}><span className="group-avatar"><Router size={16} /></span><span className="group-name">{group.name}<small>{group._count.devices} devices</small></span>{canManage && <button className="icon-button danger-hover" title="Delete group" onClick={() => removeGroup(group)}><Trash2 size={15} /></button>}</div>)}{groups.length === 0 && <p className="table-empty">{loading ? "Loading device groups..." : "No groups yet. Add a group, then assign devices from the device editor."}</p>}</div>
                         <div className="tag-summary"><strong>Tags</strong><span>{tags.length} shared tags in use</span>{tags.map((tag) => <span className="tag-pill" key={tag.id}>{tag.name} · {tag._count.devices}</span>)}</div>
                     </section>
                     <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">DELIVERY</span><h2>Notification channels</h2><p>Channel credentials are encrypted using ALERT_ENCRYPTION_KEY.</p></div></div>
-                        <div className="channel-list">{channels.map((channel) => <div className="channel-row" key={channel.id}><span className="channel-icon"><Send size={16} /></span><span className="channel-name">{channel.name}<small>{channel.type} · {channel.lastError ? "Last delivery failed" : channel.lastSentAt ? "Last sent " + new Date(channel.lastSentAt).toLocaleString() : "Not sent yet"}</small></span>{canManage && <><button className="button button-quiet small-button" onClick={() => runChannelTest(channel)}>Test</button><button className="icon-button danger-hover" title="Delete channel" onClick={() => removeChannel(channel)}><Trash2 size={15} /></button></>}</div>)}{channels.length === 0 && <p className="table-empty">No notification channels configured.</p>}</div>
+                        <div className="channel-list">{channels.map((channel) => <div className="channel-row" key={channel.id}><span className="channel-icon"><Send size={16} /></span><span className="channel-name">{channel.name}<small>{channel.type} · {channel.lastError ? "Last delivery failed" : channel.lastSentAt ? "Last sent " + new Date(channel.lastSentAt).toLocaleString() : "Not sent yet"}</small></span>{canManage && <><button className="button button-quiet small-button" onClick={() => runChannelTest(channel)}>Test</button><button className="icon-button danger-hover" title="Delete channel" onClick={() => removeChannel(channel)}><Trash2 size={15} /></button></>}</div>)}{channels.length === 0 && <p className="table-empty">{loading ? "Loading notification channels..." : "No notification channels configured."}</p>}</div>
                         {canManage && <form className="channel-form" onSubmit={addChannel}>
                             <div className="phase2-section-heading"><h3>Add notification channel</h3></div>
                             <div className="form-row"><label>Name<input name="name" value={channelForm.name} onChange={updateChannel} required maxLength="80" /></label><label>Type<select name="type" value={channelForm.type} onChange={updateChannel}><option value="WEBHOOK">Webhook</option><option value="TELEGRAM">Telegram</option><option value="EMAIL">Email (SMTP)</option></select></label></div>

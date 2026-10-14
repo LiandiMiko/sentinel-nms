@@ -36,9 +36,11 @@ export default function Alerts() {
     const [form, setForm] = useState(initialRule);
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [stateFilter, setStateFilter] = useState("");
 
     const load = useCallback(async () => {
+        setLoading(true);
         try {
             const [ruleData, eventData, channelData, groupData] = await Promise.all([
                 getAlertRules(),
@@ -53,6 +55,8 @@ export default function Alerts() {
             setError("");
         } catch (requestError) {
             setError(requestError.response?.data?.message ?? "Could not load alert data.");
+        } finally {
+            setLoading(false);
         }
     }, [stateFilter]);
 
@@ -155,7 +159,7 @@ export default function Alerts() {
                                     <td>{canManage && <button className={`switch ${rule.enabled ? "on" : ""}`} type="button" onClick={() => toggleRule(rule)} aria-label={rule.enabled ? "Disable rule" : "Enable rule"}><i /></button>}</td>
                                     <td>{canManage && <button className="icon-button danger-hover" title="Delete rule" onClick={() => removeRule(rule)}><Trash2 size={15} /></button>}</td>
                                 </tr>)}
-                                {rules.length === 0 && <tr><td colSpan="7" className="table-empty">No alert rules created yet.</td></tr>}</tbody>
+                                {rules.length === 0 && <tr><td colSpan="7" className="table-empty">{loading ? "Loading alert rules..." : "No alert rules created yet."}</td></tr>}</tbody>
                             </table>
                         </div>
                     </section>
@@ -163,7 +167,7 @@ export default function Alerts() {
                         <div className="phase2-section-heading"><div><span className="eyebrow">EVENT LOG</span><h2>Alert history</h2></div><select className="compact-select" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}><option value="">All states</option><option value="open">Open</option><option value="acknowledged">Acknowledged</option><option value="resolved">Resolved</option></select></div>
                         <div className="table-wrap"><table className="device-table phase2-table"><thead><tr><th>DEVICE</th><th>ALERT</th><th>SEVERITY</th><th>STATE</th><th>TRIGGERED</th><th /></tr></thead><tbody>
                             {events.map((alert) => <tr key={alert.id}><td><strong>{alert.deviceName}</strong><small className="cell-subtitle">{alert.deviceIpAddress}</small></td><td>{alert.message}</td><td><span className={`severity ${alert.rule.severity.toLowerCase()}`}>{alert.rule.severity}</span></td><td><span className={`state-pill ${alert.state}`}>{alert.state}</span></td><td>{formatDate(alert.triggeredAt)}</td><td>{canManage && alert.state === "open" && <button className="button button-quiet small-button" onClick={() => ackAlert(alert)}>Acknowledge</button>}</td></tr>)}
-                            {events.length === 0 && <tr><td colSpan="6" className="table-empty">No alerts match this filter.</td></tr>}
+                            {events.length === 0 && <tr><td colSpan="6" className="table-empty">{loading ? "Loading alert history..." : "No alerts match this filter."}</td></tr>}
                         </tbody></table></div>
                     </section>
                 </div>

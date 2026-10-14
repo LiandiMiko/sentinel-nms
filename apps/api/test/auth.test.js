@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes, scryptSync } from "node:crypto";
 import { describe, it } from "node:test";
 import {
     createLoginRateLimiter,
@@ -9,12 +10,30 @@ import {
 import { hashPassword, verifyPassword } from "../src/modules/auth/auth.service.js";
 
 describe("authentication primitives", () => {
-    it("hashes passwords with scrypt and verifies only the matching password", async () => {
+    it("hashes new passwords with bcrypt and verifies only the matching password", async () => {
         const storedHash = await hashPassword("a-long-test-password");
-        assert.match(storedHash, /^scrypt\$16384\$8\$1\$/);
+        assert.match(storedHash, /^bcrypt-sha256\$12\$\$2[aby]\$12\$/);
         assert.equal(await verifyPassword("a-long-test-password", storedHash), true);
         assert.equal(await verifyPassword("another-password", storedHash), false);
         assert.equal(await verifyPassword("a-long-test-password", "invalid"), false);
+    });
+
+    it("verifies the entire long password rather than a bcrypt-truncated prefix", async () => {
+        const password = `${"long-password-".repeat(8)}🔐`;
+        const storedHash = await hashPassword(password);
+
+        assert.equal(await verifyPassword(password, storedHash), true);
+        assert.equal(await verifyPassword(`${password}different`, storedHash), false);
+    });
+
+    it("continues to verify existing scrypt hashes during password migration", async () => {
+        const password = "existing-test-password";
+        const salt = randomBytes(16).toString("hex");
+        const derivedKey = scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 }).toString("hex");
+        const legacyHash = `scrypt$16384$8$1$${salt}$${derivedKey}`;
+
+        assert.equal(await verifyPassword(password, legacyHash), true);
+        assert.equal(await verifyPassword("wrong-password", legacyHash), false);
     });
 
     it("reads only the named session cookie", () => {

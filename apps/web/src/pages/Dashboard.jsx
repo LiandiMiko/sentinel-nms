@@ -83,7 +83,12 @@ function DeviceDialog({ device, onClose, onSaved }) {
             onSaved();
             onClose();
         } catch (requestError) {
-            setError(requestError.response?.data?.message ?? "Device could not be saved.");
+            const validationDetails = requestError.response?.data?.errors
+                ?.map(({ path, message }) => `${path}: ${message}`)
+                .join("; ");
+            setError(validationDetails
+                ? `Validation error: ${validationDetails}`
+                : requestError.response?.data?.message ?? "Device could not be saved.");
         } finally {
             setSaving(false);
         }
@@ -157,6 +162,7 @@ export default function Dashboard() {
     const [dialogDevice, setDialogDevice] = useState(undefined);
     const canManage = user.role !== "VIEWER";
     const [refreshing, setRefreshing] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
     const [polling, setPolling] = useState(false);
     const [filter, setFilter] = useState("ALL");
 
@@ -171,6 +177,7 @@ export default function Dashboard() {
             setError(requestError.response?.data?.message ?? "Could not connect to the Sentinel API.");
         } finally {
             setRefreshing(false);
+            setInitialLoading(false);
         }
     }, []);
 
@@ -270,7 +277,7 @@ export default function Dashboard() {
                                             <td><div className="row-actions"><Link to={`/device/${device.id}`} className="icon-button" title="View device"><Cpu size={16} /></Link>{canManage && <><button className="icon-button" title="Edit device" onClick={() => setDialogDevice(device)}><Pencil size={15} /></button><button className="icon-button danger-hover" title="Delete device" onClick={() => removeDevice(device)}><Trash2 size={15} /></button></>}</div></td>
                                         </tr>
                                     ))}
-                                    {visibleDevices.length === 0 && <tr><td colSpan="6"><div className="empty-state"><span className="empty-icon"><Router size={23} /></span><strong>{devices.length === 0 ? "Your network is ready" : "No matching devices"}</strong><p>{devices.length === 0 ? "Add your first SNMP device to start monitoring." : "Try selecting a different status filter."}</p>{devices.length === 0 && canManage && <button className="button button-primary" onClick={() => setDialogDevice(null)}><CirclePlus size={16} />Add your first device</button>}</div></td></tr>}
+                                    {visibleDevices.length === 0 && <tr><td colSpan="6"><div className="empty-state" aria-live="polite"><span className="empty-icon"><Router size={23} /></span><strong>{initialLoading ? "Loading devices..." : error && devices.length === 0 ? "Devices could not be loaded" : devices.length === 0 ? "Your network is ready" : "No matching devices"}</strong><p>{initialLoading ? "Fetching the latest monitoring data." : error && devices.length === 0 ? "Check the API connection, then refresh." : devices.length === 0 ? "Add your first SNMP device to start monitoring." : "Try selecting a different status filter."}</p>{!initialLoading && !error && devices.length === 0 && canManage && <button className="button button-primary" onClick={() => setDialogDevice(null)}><CirclePlus size={16} />Add your first device</button>}</div></td></tr>}
                                 </tbody>
                             </table>
                         </div>

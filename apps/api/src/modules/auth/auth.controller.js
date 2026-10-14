@@ -48,7 +48,9 @@ function clearSessionCookie(res) {
 class AuthController {
     async login(req, res) {
         const input = loginSchema.parse(req.body);
+        req.auditActorEmail = input.email.trim().toLowerCase();
         const session = await authService.login(input.email, input.password);
+        req.authUser = session.user;
         setSessionCookie(res, session.token, session.expiresAt);
         return success(res, { user: session.user }, "Signed in");
     }

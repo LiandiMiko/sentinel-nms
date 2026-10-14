@@ -11,22 +11,27 @@ const booleanSchema = z.preprocess((value) => {
     return value;
 }, z.boolean());
 
+const optionalCredential = (schema) => z.preprocess(
+    (value) => value === "" ? undefined : value,
+    schema.optional()
+);
+
 const deviceFields = {
     name: z.string().min(3),
     ipAddress: ipv4Schema,
     community: z.string().min(1).max(128).default("public"),
     snmpPort: z.coerce.number().int().min(1).max(65535).default(161),
     snmpVersion: z.enum(["1", "2c", "3"]).default("2c"),
-    snmpSecurityName: z.string().trim().min(1).max(32).optional(),
+    snmpSecurityName: optionalCredential(z.string().trim().min(1).max(32)),
     snmpSecurityLevel: z.enum(["noAuthNoPriv", "authNoPriv", "authPriv"]).default("authPriv"),
     snmpAuthProtocol: z.enum(["md5", "sha", "sha224", "sha256", "sha384", "sha512"]).default("sha"),
-    snmpAuthPassword: z.string().min(8).max(256).optional(),
+    snmpAuthPassword: optionalCredential(z.string().min(8).max(256)),
     snmpPrivProtocol: z.enum(["des", "aes", "aes256b", "aes256r"]).default("aes"),
-    snmpPrivPassword: z.string().min(8).max(256).optional(),
+    snmpPrivPassword: optionalCredential(z.string().min(8).max(256)),
     apiPort: z.coerce.number().int().positive().default(8728),
     routerOsPort: z.coerce.number().int().min(1).max(65535).default(443),
-    username: z.string().max(128).optional(),
-    password: z.string().max(256).optional(),
+    username: optionalCredential(z.string().max(128)),
+    password: optionalCredential(z.string().max(256)),
     enabled: booleanSchema.default(true)
 };
 

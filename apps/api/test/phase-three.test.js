@@ -42,6 +42,30 @@ describe("private SNMP discovery range", () => {
 });
 
 describe("SNMPv3 device validation and secret storage", () => {
+    it("accepts the device form's empty optional credentials for SNMPv2c", () => {
+        const result = createDeviceSchema.safeParse({
+            name: "Router",
+            ipAddress: "10.0.0.1",
+            community: "public",
+            snmpPort: "161",
+            snmpVersion: "2c",
+            snmpSecurityName: "",
+            snmpSecurityLevel: "authPriv",
+            snmpAuthProtocol: "sha",
+            snmpAuthPassword: "",
+            snmpPrivProtocol: "aes",
+            snmpPrivPassword: "",
+            routerOsPort: 443,
+            username: "",
+            password: "",
+            enabled: true
+        });
+        assert.equal(result.success, true);
+        assert.equal(result.data.snmpSecurityName, undefined);
+        assert.equal(result.data.snmpAuthPassword, undefined);
+        assert.equal(result.data.snmpPrivPassword, undefined);
+    });
+
     it("requires security identity and the credentials selected by the security level", () => {
         assert.equal(createDeviceSchema.safeParse({
             name: "Router",

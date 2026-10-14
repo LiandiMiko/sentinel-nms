@@ -190,6 +190,23 @@ model Session {
   @@index([expiresAt])
 }
 
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actorEmail String?
+  action    String
+  method    String
+  path      String
+  status    Int
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([status, createdAt])
+}
+
 model NotificationChannel {
   id        String   @id @default(cuid())
   name      String

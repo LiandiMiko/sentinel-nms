@@ -1,26 +1,37 @@
-import { createHash, randomBytes, scrypt as scryptCallback, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+import bcrypt from "bcryptjs";
 import prisma from "../../core/database/prisma.js";
 import env from "../../core/config/env.js";
 
 const scrypt = promisify(scryptCallback);
 const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
-const DUMMY_SALT = "sentinel-nms-auth-dummy";
-const DUMMY_HASH = scryptSync("not-a-real-password", DUMMY_SALT, 64, { N: 16384, r: 8, p: 1 }).toString("hex");
+const BCRYPT_ROUNDS = 12;
+const DUMMY_BCRYPT_HASH = "$2b$12$YDhYsrJM7tPyZHUBkxR2neadCw.yD9H0cX6yEVOwFaR50pXrMhuLK";
+const BCRYPT_HASH_PREFIX = `bcrypt-sha256$${BCRYPT_ROUNDS}$`;
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const normalizeEmail = (email) => email.trim().toLowerCase();
+const bcryptInput = (password) => createHash("sha256")
+    .update("sentinel-nms:bcrypt-password:v1\0")
+    .update(password, "utf8")
+    .digest("hex");
 const publicUser = ({ id, email, role, enabled, createdAt, updatedAt }) => ({
     id, email, role, enabled, createdAt, updatedAt
 });
 
 export async function hashPassword(password) {
-    const salt = randomBytes(16).toString("hex");
-    const derivedKey = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-    return `scrypt$16384$8$1$${salt}$${derivedKey.toString("hex")}`;
+    const hash = await bcrypt.hash(bcryptInput(password), BCRYPT_ROUNDS);
+    return `${BCRYPT_HASH_PREFIX}${hash}`;
 }
 
 export async function verifyPassword(password, passwordHash) {
+    if (passwordHash?.startsWith(BCRYPT_HASH_PREFIX)) {
+        const bcryptHash = passwordHash.slice(BCRYPT_HASH_PREFIX.length);
+        if (!/^\$2[aby]\$12\$[./A-Za-z0-9]{53}$/.test(bcryptHash)) return false;
+        return bcrypt.compare(bcryptInput(password), bcryptHash);
+    }
+
     const [algorithm, n, r, p, salt, expectedHex] = (passwordHash || "").split("$");
     if (
         algorithm !== "scrypt" ||
@@ -30,8 +41,7 @@ export async function verifyPassword(password, passwordHash) {
         !/^[a-f0-9]{32}$/i.test(salt || "") ||
         !/^[a-f0-9]{128}$/i.test(expectedHex || "")
     ) {
-        const actual = await scrypt(password, DUMMY_SALT, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-        timingSafeEqual(actual, Buffer.from(DUMMY_HASH, "hex"));
+        await bcrypt.compare(bcryptInput(password), DUMMY_BCRYPT_HASH);
         return false;
     }
     const actual = await scrypt(password, salt, 64, {
@@ -71,6 +81,12 @@ class AuthService {
         const passwordMatches = await verifyPassword(password, user?.passwordHash);
         if (!user || !user.enabled || !passwordMatches) {
             throw httpError(401, "Invalid email or password.");
+        }
+        if (user.passwordHash.startsWith("scrypt$")) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { passwordHash: await hashPassword(password) }
+            });
         }
 
         const token = randomBytes(32).toString("base64url");

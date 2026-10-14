@@ -16,8 +16,10 @@ import reportRoutes from "./modules/reports/report.routes.js";
 import schedulerService from "./modules/scheduler/scheduler.service.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import userRoutes from "./modules/auth/user.routes.js";
+import auditRoutes from "./modules/auth/audit.routes.js";
 import authService from "./modules/auth/auth.service.js";
 import { authenticate, csrfProtection, enforceRolePermissions } from "./modules/auth/auth.middleware.js";
+import { auditRequest } from "./modules/auth/audit.middleware.js";
 import prisma from "./core/database/prisma.js";
 
 const app = express();
@@ -51,7 +53,8 @@ app.get("/api/v1/health", (req, res) => {
 
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
-app.use("/api/v1", authenticate, csrfProtection(allowedOrigins), enforceRolePermissions);
+app.use("/api/v1/audit-log", auditRoutes);
+app.use("/api/v1", authenticate, auditRequest, csrfProtection(allowedOrigins), enforceRolePermissions);
 app.use("/api/v1/devices", deviceRoutes);
 app.use("/api/v1/metrics", metricRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
