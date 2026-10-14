@@ -21,3 +21,12 @@ export function formatLastSeen(date) {
 
     return new Date(date).toLocaleString();
 }
+export function formatDate(value) {
+    if (!value) return "Never";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short"
+    }).format(date);
+}

@@ -13,10 +13,11 @@ class DashboardService {
 
             const lastSeenTime = lastSeen
                 ? new Date(lastSeen).getTime()
-                    : 0;
+                : 0;
 
-            const status =
-                device.lastSeen && now - lastSeenTime < 30000
+            const status = !device.enabled
+                ? "DISABLED"
+                : lastSeen && now - lastSeenTime < 90000
                     ? "UP"
                     : "DOWN";
 
@@ -24,12 +25,13 @@ class DashboardService {
                 hostname: device.snapshot?.hostname,
                 uptime: device.snapshot?.uptime,
                 cpu: device.snapshot?.cpu
-};
+            };
 
             return {
                 id: device.id,
                 name: device.name,
                 ipAddress: device.ipAddress,
+                enabled: device.enabled,
                 status,
                 lastSeen: lastSeen,
                 metrics
@@ -45,27 +47,28 @@ class DashboardService {
             upDevices: devices.filter((d) => d.status === "UP").length,
             downDevices: devices.filter((d) => d.status === "DOWN").length,
             totalMetrics: await deviceRepository.countMetrics(),
-            lastPolling:
-                devices.length > 0
-                    ? devices.reduce((latest, current) =>
-                        new Date(current.lastSeen) > new Date(latest.lastSeen)
-                            ? current
-                            : latest
-                    ).lastSeen
-                    : null
+            lastPolling: devices.reduce((latest, current) => {
+                if (!current.lastSeen) return latest;
+                return !latest || current.lastSeen > latest
+                    ? current.lastSeen
+                    : latest;
+            }, null)
         };
     }
 
     async getDevice(id) {
-    return prisma.device.findUnique({
-        where: {
-            id
-        },
-        include: {
-            snapshot: true
+        const device = await prisma.device.findUnique({
+            where: { id },
+            include: { snapshot: true }
+        });
+        if (!device) {
+            const error = new Error("Device not found");
+            error.status = 404;
+            throw error;
         }
-    });
-}
+        const { community, password, ...safeDevice } = device;
+        return safeDevice;
+    }
 }
 
 export default new DashboardService();

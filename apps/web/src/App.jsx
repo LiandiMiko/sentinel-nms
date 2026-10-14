@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
     BrowserRouter,
     Routes,
@@ -5,7 +6,7 @@ import {
 } from "react-router-dom";
 
 import Dashboard from "./pages/Dashboard";
-import DeviceDetail from "./pages/DeviceDetail";
+const DeviceDetail = lazy(() => import("./pages/DeviceDetail"));
 
 export default function App() {
     return (
@@ -19,7 +20,11 @@ export default function App() {
 
                 <Route
                     path="/device/:id"
-                    element={<DeviceDetail />}
+                    element={
+                        <Suspense fallback={<div className="loading-state">Loading device view...</div>}>
+                            <DeviceDetail />
+                        </Suspense>
+                    }
                 />
 
             </Routes>

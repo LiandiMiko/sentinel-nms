@@ -4,8 +4,11 @@ import metricService from "../metrics/metric.service.js";
 class SchedulerService {
     start() {
         console.log("Starting Scheduler...");
+        let polling = false;
 
         cron.schedule("*/30 * * * * *", async () => {
+            if (polling) return;
+            polling = true;
             console.log(
                 `[Scheduler] ${new Date().toISOString()} Polling devices...`
             );
@@ -18,6 +21,8 @@ class SchedulerService {
                 );
             } catch (err) {
                 console.error("[Scheduler] Error:", err.message);
+            } finally {
+                polling = false;
             }
         });
     }

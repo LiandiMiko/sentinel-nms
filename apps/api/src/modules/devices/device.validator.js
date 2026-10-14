@@ -5,16 +5,22 @@ const ipv4Schema = z.string().regex(
     "Invalid IPv4 address"
 );
 
+const booleanSchema = z.preprocess((value) => {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return value;
+}, z.boolean());
+
 export const createDeviceSchema = z.object({
     name: z.string().min(3),
     ipAddress: ipv4Schema,
     community: z.string().min(1),
     snmpPort: z.coerce.number().int().positive().default(161),
-    snmpVersion: z.string().default("2c"),
+    snmpVersion: z.enum(["1", "2c"]).default("2c"),
     apiPort: z.coerce.number().int().positive().default(8728),
     username: z.string().optional(),
     password: z.string().optional(),
-    enabled: z.coerce.boolean().default(true)
+    enabled: booleanSchema.default(true)
 });
 
 export const updateDeviceSchema = z.object({
@@ -22,9 +28,9 @@ export const updateDeviceSchema = z.object({
     ipAddress: ipv4Schema.optional(),
     community: z.string().min(1).optional(),
     snmpPort: z.coerce.number().int().positive().optional(),
-    snmpVersion: z.string().optional(),
+    snmpVersion: z.enum(["1", "2c"]).optional(),
     apiPort: z.coerce.number().int().positive().optional(),
     username: z.string().optional(),
     password: z.string().optional(),
-    enabled: z.coerce.boolean().optional()
+    enabled: booleanSchema.optional()
 });

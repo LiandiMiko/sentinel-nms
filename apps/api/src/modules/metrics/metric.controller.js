@@ -29,6 +29,11 @@ class MetricController {
         });
     }
 
+    async interfaces(req, res) {
+        const data = await metricService.getInterfaces(req.params.id);
+        res.json({ success: true, data });
+    }
+
 }
 
 export default new MetricController();

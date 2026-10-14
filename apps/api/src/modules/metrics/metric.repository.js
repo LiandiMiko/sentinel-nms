@@ -21,6 +21,17 @@ class MetricRepository {
         });
     }
 
+    async findLatestInterfaceMetrics(deviceId) {
+        return prisma.metric.findMany({
+            where: {
+                deviceId,
+                name: { startsWith: "interface." }
+            },
+            orderBy: { createdAt: "desc" },
+            take: 5000
+        });
+    }
+
     async upsertSnapshot(data) {
         return prisma.deviceSnapshot.upsert({
             where: {
@@ -34,6 +45,11 @@ class MetricRepository {
             },
             create: data
         });
+    }
+
+    async createMany(data) {
+        if (data.length === 0) return;
+        return prisma.metric.createMany({ data });
     }
     
     async latest(deviceId, limit = 50) {

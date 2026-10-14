@@ -1,6 +1,6 @@
 import snmp from "net-snmp";
 
-export function createSession(ip, community = "public", port = 161) {
+export function createSession(ip, community = "public", port = 161, version = "2c") {
 
     return snmp.createSession(ip, community, {
 
@@ -10,7 +10,7 @@ export function createSession(ip, community = "public", port = 161) {
 
         retries: 1,
 
-        version: snmp.Version2c
+        version: version === "1" ? snmp.Version1 : snmp.Version2c
 
     });
 
