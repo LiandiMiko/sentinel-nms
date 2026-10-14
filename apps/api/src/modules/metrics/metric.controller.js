@@ -15,12 +15,13 @@ class MetricController {
 
     async history(req, res) {
         const { id } = req.params;
-        const { name = "cpu", limit = 100 } = req.query;
+        const { name = "cpu", limit = 100, rangeSeconds } = req.query;
 
         const data = await metricService.getHistory(
             id,
             name,
-            limit
+            limit,
+            rangeSeconds ?? null
         );
 
         res.json({
@@ -31,6 +32,16 @@ class MetricController {
 
     async interfaces(req, res) {
         const data = await metricService.getInterfaces(req.params.id);
+        res.json({ success: true, data });
+    }
+
+    async summary(req, res) {
+        const data = await metricService.getSummary(req.params.id);
+        res.json({ success: true, data });
+    }
+
+    async events(req, res) {
+        const data = await metricService.getEvents(req.params.id);
         res.json({ success: true, data });
     }
 

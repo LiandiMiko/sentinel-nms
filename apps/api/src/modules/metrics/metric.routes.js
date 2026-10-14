@@ -14,5 +14,13 @@ router.get(
     "/device/:id/interfaces",
     asyncHandler(metricController.interfaces.bind(metricController))
 );
+router.get(
+    "/device/:id/events",
+    asyncHandler(metricController.events.bind(metricController))
+);
+router.get(
+    "/device/:id/summary",
+    asyncHandler(metricController.summary.bind(metricController))
+);
 
 export default router;

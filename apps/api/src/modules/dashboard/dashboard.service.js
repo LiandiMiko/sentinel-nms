@@ -17,7 +17,7 @@ class DashboardService {
 
             const status = !device.enabled
                 ? "DISABLED"
-                : lastSeen && now - lastSeenTime < 90000
+                : device.status === "up" && lastSeen && now - lastSeenTime < 90000
                     ? "UP"
                     : "DOWN";
 
@@ -31,10 +31,21 @@ class DashboardService {
                 id: device.id,
                 name: device.name,
                 ipAddress: device.ipAddress,
+                snmpPort: device.snmpPort,
+                snmpVersion: device.snmpVersion,
+                snmpSecurityName: device.snmpSecurityName,
+                snmpSecurityLevel: device.snmpSecurityLevel,
+                snmpAuthProtocol: device.snmpAuthProtocol,
+                snmpPrivProtocol: device.snmpPrivProtocol,
+                routerOsPort: device.routerOsPort,
+                username: device.username,
                 enabled: device.enabled,
                 status,
                 lastSeen: lastSeen,
-                metrics
+                metrics,
+                groups: device.groups.map(({ group }) => group),
+                tags: device.tags.map(({ tag }) => tag),
+                lastError: device.lastError
             };
         });
     }
@@ -47,6 +58,9 @@ class DashboardService {
             upDevices: devices.filter((d) => d.status === "UP").length,
             downDevices: devices.filter((d) => d.status === "DOWN").length,
             totalMetrics: await deviceRepository.countMetrics(),
+            openAlerts: await prisma.alert.count({
+                where: { state: { in: ["open", "acknowledged"] } }
+            }),
             lastPolling: devices.reduce((latest, current) => {
                 if (!current.lastSeen) return latest;
                 return !latest || current.lastSeen > latest
@@ -66,7 +80,13 @@ class DashboardService {
             error.status = 404;
             throw error;
         }
-        const { community, password, ...safeDevice } = device;
+        const {
+            community,
+            password,
+            snmpAuthPassword,
+            snmpPrivPassword,
+            ...safeDevice
+        } = device;
         return safeDevice;
     }
 }

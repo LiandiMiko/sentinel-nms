@@ -7,6 +7,8 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: file:/data/sentinel.db
+      ALERT_ENCRYPTION_KEY: ${ALERT_ENCRYPTION_KEY:-}
+      DEVICE_ENCRYPTION_KEY: ${DEVICE_ENCRYPTION_KEY:-}
     volumes:
       - sentinel_data:/data
     restart: unless-stopped

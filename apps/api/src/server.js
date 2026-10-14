@@ -8,6 +8,11 @@ import { notFoundHandler } from "./core/middleware/not-found-handler.js";
 import deviceRoutes from "./modules/devices/device.routes.js";
 import metricRoutes from "./modules/metrics/metric.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
+import alertRoutes from "./modules/alerts/alert.routes.js";
+import groupRoutes from "./modules/devices/group.routes.js";
+import settingsRoutes from "./modules/settings/settings.routes.js";
+import discoveryRoutes from "./modules/discovery/discovery.routes.js";
+import reportRoutes from "./modules/reports/report.routes.js";
 import schedulerService from "./modules/scheduler/scheduler.service.js";
 
 const app = express();
@@ -26,6 +31,11 @@ app.use((req, res, next) => {
 app.use("/api/v1/devices", deviceRoutes);
 app.use("/api/v1/metrics", metricRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/alerts", alertRoutes);
+app.use("/api/v1/groups", groupRoutes);
+app.use("/api/v1/settings", settingsRoutes);
+app.use("/api/v1/discovery", discoveryRoutes);
+app.use("/api/v1/reports", reportRoutes);
 
 
 app.get("/api/v1/health", (req, res) => {

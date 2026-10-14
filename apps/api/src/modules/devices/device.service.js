@@ -1,4 +1,5 @@
 import repository from "./device.repository.js";
+import { encryptDeviceSecret } from "../../core/utils/secret.js";
 
 class DeviceService {
     async create(data) {
@@ -10,7 +11,8 @@ class DeviceService {
             throw error;
         }
 
-        return repository.create(data);
+        this.validateSnmpSecurity(data);
+        return repository.create(this.protectSecrets(data));
     }
 
     async findAll() {
@@ -30,7 +32,7 @@ class DeviceService {
     }
 
     async update(id, data) {
-        await this.findById(id);
+        const current = await this.findById(id);
 
         if (data.ipAddress) {
             const exists = await repository.findByIp(data.ipAddress);
@@ -42,7 +44,30 @@ class DeviceService {
             }
         }
 
-        return repository.update(id, data);
+        this.validateSnmpSecurity({ ...current, ...data });
+        return repository.update(id, this.protectSecrets(data));
+    }
+
+    validateSnmpSecurity(device) {
+        if (device.snmpVersion !== "3") return;
+        const missingUsername = !device.snmpSecurityName;
+        const missingAuth = device.snmpSecurityLevel !== "noAuthNoPriv"
+            && !device.snmpAuthPassword;
+        const missingPrivacy = device.snmpSecurityLevel === "authPriv"
+            && !device.snmpPrivPassword;
+        if (missingUsername || missingAuth || missingPrivacy) {
+            const error = new Error("SNMPv3 security name and required authentication/privacy credentials must be configured.");
+            error.status = 400;
+            throw error;
+        }
+    }
+
+    protectSecrets(data) {
+        const protectedData = { ...data };
+        for (const key of ["password", "snmpAuthPassword", "snmpPrivPassword"]) {
+            if (protectedData[key]) protectedData[key] = encryptDeviceSecret(protectedData[key]);
+        }
+        return protectedData;
     }
 
     async delete(id) {

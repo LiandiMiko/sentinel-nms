@@ -11,26 +11,45 @@ const booleanSchema = z.preprocess((value) => {
     return value;
 }, z.boolean());
 
-export const createDeviceSchema = z.object({
+const deviceFields = {
     name: z.string().min(3),
     ipAddress: ipv4Schema,
-    community: z.string().min(1),
-    snmpPort: z.coerce.number().int().positive().default(161),
-    snmpVersion: z.enum(["1", "2c"]).default("2c"),
+    community: z.string().min(1).max(128).default("public"),
+    snmpPort: z.coerce.number().int().min(1).max(65535).default(161),
+    snmpVersion: z.enum(["1", "2c", "3"]).default("2c"),
+    snmpSecurityName: z.string().trim().min(1).max(32).optional(),
+    snmpSecurityLevel: z.enum(["noAuthNoPriv", "authNoPriv", "authPriv"]).default("authPriv"),
+    snmpAuthProtocol: z.enum(["md5", "sha", "sha224", "sha256", "sha384", "sha512"]).default("sha"),
+    snmpAuthPassword: z.string().min(8).max(256).optional(),
+    snmpPrivProtocol: z.enum(["des", "aes", "aes256b", "aes256r"]).default("aes"),
+    snmpPrivPassword: z.string().min(8).max(256).optional(),
     apiPort: z.coerce.number().int().positive().default(8728),
-    username: z.string().optional(),
-    password: z.string().optional(),
+    routerOsPort: z.coerce.number().int().min(1).max(65535).default(443),
+    username: z.string().max(128).optional(),
+    password: z.string().max(256).optional(),
     enabled: booleanSchema.default(true)
-});
+};
 
-export const updateDeviceSchema = z.object({
-    name: z.string().min(3).optional(),
-    ipAddress: ipv4Schema.optional(),
-    community: z.string().min(1).optional(),
-    snmpPort: z.coerce.number().int().positive().optional(),
-    snmpVersion: z.enum(["1", "2c"]).optional(),
-    apiPort: z.coerce.number().int().positive().optional(),
-    username: z.string().optional(),
-    password: z.string().optional(),
-    enabled: booleanSchema.optional()
-});
+function validateSnmpSecurity(device, context) {
+    if (device.snmpVersion !== "3") return;
+    if (!device.snmpSecurityName) {
+        context.addIssue({ code: "custom", path: ["snmpSecurityName"], message: "SNMPv3 username is required" });
+    }
+    if (device.snmpSecurityLevel !== "noAuthNoPriv" && !device.snmpAuthPassword) {
+        context.addIssue({ code: "custom", path: ["snmpAuthPassword"], message: "SNMPv3 authentication password is required" });
+    }
+    if (device.snmpSecurityLevel === "authPriv" && !device.snmpPrivPassword) {
+        context.addIssue({ code: "custom", path: ["snmpPrivPassword"], message: "SNMPv3 privacy password is required" });
+    }
+}
+
+export const createDeviceSchema = z.object(deviceFields).superRefine(validateSnmpSecurity);
+
+export const updateDeviceSchema = z.object(
+    Object.fromEntries(Object.entries(deviceFields).map(([key, schema]) => [
+        key,
+        key === "community"
+            ? z.string().min(1).optional()
+            : schema.optional()
+    ]))
+);

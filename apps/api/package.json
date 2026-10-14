@@ -5,17 +5,21 @@
   "scripts": {
     "predev": "node scripts/prepare-db.js",
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "helmet": "^8.2.0",
     "morgan": "^1.11.0",
     "net-snmp": "^3.26.3",
     "node-cron": "^4.6.0",
+    "nodemailer": "^10.1.1",
+    "pdfkit": "^0.20.2",
     "pino": "^10.3.1",
     "zod": "^4.4.3"
   },

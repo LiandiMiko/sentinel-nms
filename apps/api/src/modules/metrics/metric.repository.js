@@ -21,7 +21,51 @@ class MetricRepository {
         });
     }
 
+    async findHistoryWindow(deviceId, metricName, rangeSeconds, maxPoints) {
+        const start = Date.now() - rangeSeconds * 1000;
+        const bucketSeconds = Math.max(1, Math.ceil(rangeSeconds / maxPoints));
+        return prisma.$queryRaw`
+            SELECT "id", "deviceId", "oid", "name", "value", "unit", "createdAt"
+            FROM (
+                SELECT
+                    "id", "deviceId", "oid", "name", "value", "unit", "createdAt",
+                    ROW_NUMBER() OVER (
+                        PARTITION BY CAST(("createdAt" - ${start}) / (${bucketSeconds} * 1000) AS INTEGER)
+                        ORDER BY "createdAt" DESC, "id" DESC
+                    ) AS "bucketRank"
+                FROM "Metric"
+                WHERE "deviceId" = ${deviceId}
+                    AND "name" = ${metricName}
+                    AND "createdAt" >= ${start}
+            )
+            WHERE "bucketRank" = 1
+            ORDER BY "createdAt" ASC
+        `;
+    }
+
     async findLatestInterfaceMetrics(deviceId) {
+        return prisma.metric.findMany({
+            where: {
+                deviceId,
+                name: { startsWith: "interface." }
+            },
+            orderBy: { createdAt: "desc" },
+            take: 5000
+        });
+    }
+
+    async findLatestSystemMetrics(deviceId) {
+        return prisma.metric.findMany({
+            where: {
+                deviceId,
+                NOT: { name: { startsWith: "interface." } }
+            },
+            orderBy: { createdAt: "desc" },
+            take: 1000
+        });
+    }
+
+    async findLatestInterfaceStatuses(deviceId) {
         return prisma.metric.findMany({
             where: {
                 deviceId,

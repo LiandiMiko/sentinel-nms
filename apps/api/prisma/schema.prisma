@@ -14,18 +14,32 @@ model Device {
   snmpPort    Int      @default(161)
   snmpVersion String   @default("2c")
   community   String
+  snmpSecurityName     String?
+  snmpSecurityLevel    String   @default("authPriv")
+  snmpAuthProtocol     String   @default("sha")
+  snmpAuthPassword     String?
+  snmpPrivProtocol     String   @default("aes")
+  snmpPrivPassword     String?
   apiPort     Int      @default(8728)
+  routerOsPort Int     @default(443)
   username    String?
   password    String?
   enabled     Boolean  @default(true)
 
   lastSeen    DateTime?
+  downSince   DateTime?
+  status      String   @default("unknown")
+  lastError   String?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   metrics Metric[]
   snapshot  DeviceSnapshot?
+  groups DeviceGroupMembership[]
+  tags DeviceTagAssignment[]
+  alerts Alert[]
+  events DeviceEvent[]
 }
 
 model Metric {
@@ -37,6 +51,9 @@ model Metric {
   unit       String?
   createdAt  DateTime @default(now())
   device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([deviceId, name, createdAt])
 }
 
 model DeviceSnapshot {
@@ -51,4 +68,122 @@ model DeviceSnapshot {
 
   lastSeen   DateTime
   updatedAt  DateTime @updatedAt
+}
+
+model DeviceGroup {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  devices     DeviceGroupMembership[]
+  alertRules  AlertRule[]
+}
+
+model DeviceGroupMembership {
+  deviceId  String
+  groupId   String
+  createdAt DateTime @default(now())
+  device    Device      @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  group     DeviceGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([deviceId, groupId])
+  @@index([groupId])
+}
+
+model DeviceTag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  devices   DeviceTagAssignment[]
+}
+
+model DeviceTagAssignment {
+  deviceId String
+  tagId    String
+  device   Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  tag      DeviceTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([deviceId, tagId])
+  @@index([tagId])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model AlertRule {
+  id              String   @id @default(cuid())
+  name            String
+  type            String
+  severity        String   @default("HIGH")
+  threshold       Float?
+  durationSeconds Int      @default(0)
+  enabled         Boolean  @default(true)
+  groupId         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  group           DeviceGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  events          Alert[]
+  channels        AlertRuleChannel[]
+
+  @@index([enabled, type])
+}
+
+model Alert {
+  id              String   @id @default(cuid())
+  ruleId          String
+  deviceId        String?
+  deviceName      String
+  deviceIpAddress String
+  message         String
+  value           String?
+  state           String   @default("open")
+  triggeredAt     DateTime @default(now())
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+  resolvedAt      DateTime?
+  rule            AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  device          Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([state, triggeredAt])
+  @@index([deviceId, ruleId, state])
+}
+
+model DeviceEvent {
+  id        String    @id @default(cuid())
+  deviceId  String
+  type      String
+  subject   String
+  message   String
+  startedAt DateTime  @default(now())
+  resolvedAt DateTime?
+  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, startedAt])
+  @@index([deviceId, type, subject, resolvedAt])
+}
+
+model NotificationChannel {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  config    String
+  enabled   Boolean  @default(true)
+  lastSentAt DateTime?
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  rules     AlertRuleChannel[]
+}
+
+model AlertRuleChannel {
+  ruleId    String
+  channelId String
+  rule      AlertRule         @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  channel   NotificationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([ruleId, channelId])
+  @@index([channelId])
 }

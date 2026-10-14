@@ -59,23 +59,42 @@ class DeviceRepository {
         });
     }
     async updateLastSeen(id) {
-    return prisma.device.update({
-        where: { id },
-        data: {
-            lastSeen: new Date()
-        }
-    });
-}
+        return prisma.device.update({
+            where: { id },
+            data: {
+                lastSeen: new Date(),
+                status: "up",
+                downSince: null,
+                lastError: null
+            }
+        });
+    }
+
+    async markDown(id, message) {
+        const device = await prisma.device.findUnique({
+            where: { id },
+            select: { downSince: true }
+        });
+        if (!device) return;
+        return prisma.device.update({
+            where: { id },
+            data: {
+                status: "down",
+                downSince: device.downSince ?? new Date(),
+                lastError: message.slice(0, 500)
+            }
+        });
+    }
     async findAllWithMetrics() {
-    return prisma.device.findMany({
-        include: {
-            snapshot: true
-        },
-        orderBy: {
-            name: "asc"
-        }
-    });
-}
+        return prisma.device.findMany({
+            include: {
+                snapshot: true,
+                groups: { include: { group: { select: { id: true, name: true } } } },
+                tags: { include: { tag: { select: { id: true, name: true } } } }
+            },
+            orderBy: { name: "asc" }
+        });
+    }
     
     async countAll() {
     return prisma.device.count();

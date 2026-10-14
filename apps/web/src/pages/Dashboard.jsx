@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, AlertTriangle, CirclePlus, Cpu, Pencil, RefreshCw, Router, Trash2, Wifi, X } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, CirclePlus, Cpu, FileBarChart, Pencil, RefreshCw, Router, Search, Settings, ShieldAlert, Trash2, Wifi, X } from "lucide-react";
 import { getSummary, getDevices } from "../api/dashboard";
 import api from "../api/client";
-import { formatDate } from "../utils/format";
+import { formatDate, formatUptime } from "../utils/format";
 
 const emptyDevice = {
     name: "",
@@ -11,7 +11,18 @@ const emptyDevice = {
     community: "public",
     snmpPort: 161,
     snmpVersion: "2c",
-    enabled: true
+    snmpSecurityName: "",
+    snmpSecurityLevel: "authPriv",
+    snmpAuthProtocol: "sha",
+    snmpAuthPassword: "",
+    snmpPrivProtocol: "aes",
+    snmpPrivPassword: "",
+    routerOsPort: 443,
+    username: "",
+    password: "",
+    enabled: true,
+    groups: "",
+    tags: ""
 };
 
 function DeviceDialog({ device, onClose, onSaved }) {
@@ -20,7 +31,18 @@ function DeviceDialog({ device, onClose, onSaved }) {
         ipAddress: device.ipAddress,
         snmpPort: device.snmpPort ?? 161,
         snmpVersion: device.snmpVersion ?? "2c",
-        enabled: device.enabled
+        snmpSecurityName: device.snmpSecurityName ?? "",
+        snmpSecurityLevel: device.snmpSecurityLevel ?? "authPriv",
+        snmpAuthProtocol: device.snmpAuthProtocol ?? "sha",
+        snmpAuthPassword: "",
+        snmpPrivProtocol: device.snmpPrivProtocol ?? "aes",
+        snmpPrivPassword: "",
+        routerOsPort: device.routerOsPort ?? 443,
+        username: device.username ?? "",
+        password: "",
+        enabled: device.enabled,
+        groups: (device.groups ?? []).map((group) => group.name).join(", "),
+        tags: (device.tags ?? []).map((tag) => tag.name).join(", ")
     } : emptyDevice);
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
@@ -35,13 +57,27 @@ function DeviceDialog({ device, onClose, onSaved }) {
         setSaving(true);
         setError("");
         try {
-            const payload = { ...form, snmpPort: Number(form.snmpPort) };
-            if (device && !payload.community) delete payload.community;
-            await api.request({
+            const payload = { ...form, snmpPort: Number(form.snmpPort), routerOsPort: Number(form.routerOsPort) };
+            const groups = form.groups.split(",").map((value) => value.trim()).filter(Boolean);
+            const tags = form.tags.split(",").map((value) => value.trim()).filter(Boolean);
+            delete payload.groups;
+            delete payload.tags;
+            if (payload.snmpVersion !== "3" || payload.snmpSecurityLevel === "noAuthNoPriv") {
+                delete payload.snmpAuthPassword;
+            }
+            if (payload.snmpVersion !== "3" || payload.snmpSecurityLevel !== "authPriv") {
+                delete payload.snmpPrivPassword;
+            }
+            for (const secret of ["community", "password", "snmpAuthPassword", "snmpPrivPassword"]) {
+                if (device && !payload[secret]) delete payload[secret];
+            }
+            const response = await api.request({
                 method: device ? "patch" : "post",
                 url: device ? `/devices/${device.id}` : "/devices",
                 data: payload
             });
+            const deviceId = device?.id ?? response.data.data.id;
+            await api.put(`/groups/devices/${deviceId}`, { groups, tags });
             onSaved();
             onClose();
         } catch (requestError) {
@@ -73,13 +109,32 @@ function DeviceDialog({ device, onClose, onSaved }) {
                             <select name="snmpVersion" value={form.snmpVersion} onChange={update}>
                                 <option value="2c">SNMP v2c</option>
                                 <option value="1">SNMP v1</option>
+                                <option value="3">SNMP v3</option>
                             </select>
                         </label>
                         <label>Port<input name="snmpPort" type="number" min="1" max="65535" value={form.snmpPort} onChange={update} required /></label>
                     </div>
-                    <label>Community string
+                    {form.snmpVersion !== "3" ? <label>Community string
                         <input name="community" type="password" value={form.community ?? ""} onChange={update} placeholder={device ? "Leave blank to keep current" : "public"} required={!device} />
-                    </label>
+                    </label> : <>
+                        <label>SNMPv3 security name<input name="snmpSecurityName" value={form.snmpSecurityName} onChange={update} required /></label>
+                        <div className="form-row">
+                            <label>Security level<select name="snmpSecurityLevel" value={form.snmpSecurityLevel} onChange={update}><option value="noAuthNoPriv">No authentication / privacy</option><option value="authNoPriv">Authentication only</option><option value="authPriv">Authentication + privacy</option></select></label>
+                            {form.snmpSecurityLevel !== "noAuthNoPriv" && <label>Authentication protocol<select name="snmpAuthProtocol" value={form.snmpAuthProtocol} onChange={update}>{["sha", "sha224", "sha256", "sha384", "sha512", "md5"].map((protocol) => <option key={protocol} value={protocol}>{protocol.toUpperCase()}</option>)}</select></label>}
+                        </div>
+                        {form.snmpSecurityLevel !== "noAuthNoPriv" && <label>Authentication password<input name="snmpAuthPassword" type="password" minLength="8" value={form.snmpAuthPassword} onChange={update} placeholder={device ? "Leave blank to keep current" : "At least 8 characters"} required={!device || device.snmpVersion !== "3" || device.snmpSecurityLevel === "noAuthNoPriv"} /></label>}
+                        {form.snmpSecurityLevel === "authPriv" && <div className="form-row"><label>Privacy protocol<select name="snmpPrivProtocol" value={form.snmpPrivProtocol} onChange={update}>{["aes", "aes256b", "aes256r", "des"].map((protocol) => <option key={protocol} value={protocol}>{protocol.toUpperCase()}</option>)}</select></label><label>Privacy password<input name="snmpPrivPassword" type="password" minLength="8" value={form.snmpPrivPassword} onChange={update} placeholder={device ? "Leave blank to keep current" : "At least 8 characters"} required={!device || device.snmpVersion !== "3" || device.snmpSecurityLevel !== "authPriv"} /></label></div>}
+                    </>}
+                    <details>
+                        <summary>Optional MikroTik RouterOS v7 access</summary>
+                        <div className="device-form">
+                            <div className="form-row"><label>HTTPS REST port<input name="routerOsPort" type="number" min="1" max="65535" value={form.routerOsPort} onChange={update} /></label><label>RouterOS username<input name="username" value={form.username} onChange={update} autoComplete="username" /></label></div>
+                            <label>RouterOS password<input name="password" type="password" value={form.password} onChange={update} placeholder={device ? "Leave blank to keep current" : "Optional"} autoComplete="new-password" /></label>
+                            <small>Requires RouterOS v7 HTTPS REST with a valid TLS certificate and read-only API permissions.</small>
+                        </div>
+                    </details>
+                    <label>Groups <small>Separate names with commas</small><input name="groups" value={form.groups} onChange={update} placeholder="Core network, Terban" /></label>
+                    <label>Tags <small>Separate tags with commas</small><input name="tags" value={form.tags} onChange={update} placeholder="router, mikrotik, branch" /></label>
                     <label className="checkbox-label"><input name="enabled" type="checkbox" checked={form.enabled} onChange={update} /> Include in monitoring</label>
                     {error && <p className="form-error" role="alert">{error}</p>}
                     <div className="dialog-actions">
@@ -153,6 +208,7 @@ export default function Dashboard() {
         { label: "Total devices", value: summary?.totalDevices ?? 0, icon: Router, color: "blue" },
         { label: "Online", value: summary?.upDevices ?? 0, icon: Wifi, color: "green" },
         { label: "Offline", value: summary?.downDevices ?? 0, icon: AlertTriangle, color: "red" },
+        { label: "Open alerts", value: summary?.openAlerts ?? 0, icon: BellRing, color: "amber", href: "/alerts" },
         { label: "Metrics collected", value: summary?.totalMetrics ?? 0, icon: Activity, color: "violet" }
     ];
 
@@ -163,6 +219,10 @@ export default function Dashboard() {
                 <div className="sidebar-label">MONITORING</div>
                 <a href="#overview" className="side-link active"><Activity size={17} />Overview</a>
                 <a href="#devices" className="side-link"><Router size={17} />Devices<span className="side-count">{devices.length}</span></a>
+                <Link to="/alerts" className="side-link"><ShieldAlert size={17} />Alerts</Link>
+                <Link to="/discovery" className="side-link"><Search size={17} />Discovery</Link>
+                <Link to="/reports" className="side-link"><FileBarChart size={17} />Reports</Link>
+                <Link to="/settings" className="side-link"><Settings size={17} />Settings</Link>
                 <div className="sidebar-bottom">
                     <span className="live-indicator"><i />Monitoring active</span>
                     <small>Sentinel NMS · MVP</small>
@@ -184,8 +244,10 @@ export default function Dashboard() {
                     </div>
                     {error && <div className="notice-error" role="alert">{error}<button onClick={() => setError("")} aria-label="Dismiss"><X size={16} /></button></div>}
                     <div className="stats-grid">
-                        {stats.map(({ label, value, icon: Icon, color }) => (
-                            <article className="stat-card" key={label}><div className={`stat-icon ${color}`}><Icon size={18} /></div><span className="stat-label">{label}</span><strong className="stat-value">{value.toLocaleString()}</strong><span className="stat-caption">{label === "Metrics collected" ? "historical data points" : label === "Total devices" ? "registered in inventory" : "currently reporting"}</span></article>
+                        {stats.map(({ label, value, icon: Icon, color, href }) => (
+                            href
+                                ? <Link to={href} className="stat-card" key={label}><div className={`stat-icon ${color}`}><Icon size={18} /></div><span className="stat-label">{label}</span><strong className="stat-value">{value.toLocaleString()}</strong><span className="stat-caption">open incidents to review</span></Link>
+                                : <article className="stat-card" key={label}><div className={`stat-icon ${color}`}><Icon size={18} /></div><span className="stat-label">{label}</span><strong className="stat-value">{value.toLocaleString()}</strong><span className="stat-caption">{label === "Metrics collected" ? "historical data points" : label === "Total devices" ? "registered in inventory" : "currently reporting"}</span></article>
                         ))}
                     </div>
                     <section className="device-section" id="devices">
@@ -196,10 +258,10 @@ export default function Dashboard() {
                                 <tbody>
                                     {visibleDevices.map((device) => (
                                         <tr key={device.id}>
-                                            <td><div className="device-cell"><span className="device-symbol"><Router size={18} /></span><span><Link to={`/device/${device.id}`} className="device-name">{device.name}</Link><small>{device.ipAddress}</small></span></div></td>
+                                            <td><div className="device-cell"><span className="device-symbol"><Router size={18} /></span><span><Link to={`/device/${device.id}`} className="device-name">{device.name}</Link><small>{device.ipAddress}</small><span className="device-labels">{[...(device.groups ?? []).map((group) => group.name), ...(device.tags ?? []).map((tag) => `#${tag.name}`)].slice(0, 4).join(" · ")}</span></span></div></td>
                                             <td><span className={`status-badge ${device.status.toLowerCase()}`}><i />{device.status === "UP" ? "Online" : device.status === "DISABLED" ? "Disabled" : "Offline"}</span></td>
                                             <td><span className="cpu-value">{device.metrics?.cpu != null ? `${Number(device.metrics.cpu) / 10}%` : "—"}</span></td>
-                                            <td>{device.metrics?.uptime ?? "—"}</td>
+                                            <td>{formatUptime(device.metrics?.uptime)}</td>
                                             <td className="muted">{formatDate(device.lastSeen)}</td>
                                             <td><div className="row-actions"><Link to={`/device/${device.id}`} className="icon-button" title="View device"><Cpu size={16} /></Link><button className="icon-button" title="Edit device" onClick={() => setDialogDevice(device)}><Pencil size={15} /></button><button className="icon-button danger-hover" title="Delete device" onClick={() => removeDevice(device)}><Trash2 size={15} /></button></div></td>
                                         </tr>

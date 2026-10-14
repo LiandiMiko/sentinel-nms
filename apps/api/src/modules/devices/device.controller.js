@@ -1,8 +1,15 @@
 import service from "./device.service.js";
 import { createDeviceSchema, updateDeviceSchema } from "./device.validator.js";
 import { success } from "../../core/response/response.js";
+import routerOsService from "./routeros.service.js";
 
-const withoutCredentials = ({ community, password, ...device }) => device;
+const withoutCredentials = ({
+    community,
+    password,
+    snmpAuthPassword,
+    snmpPrivPassword,
+    ...device
+}) => device;
 
 class DeviceController {
     async create(req, res) {
@@ -39,6 +46,10 @@ class DeviceController {
         await service.delete(req.params.id);
 
         return success(res, null, "Device deleted successfully");
+    }
+
+    async routerOs(req, res) {
+        return success(res, await routerOsService.inspect(req.params.id), "RouterOS status retrieved");
     }
 }
 
