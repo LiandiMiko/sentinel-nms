@@ -241,6 +241,32 @@ h1, h2, p { margin-top: 0; }
 .channel-form .phase2-section-heading { min-height: unset; padding: 0 0 3px; border: 0; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .channel-form > .button { justify-self: end; }
+.account-menu { position: relative; }
+.account-menu summary { display: flex; align-items: center; gap: 9px; max-width: 260px; cursor: pointer; list-style: none; color: #586274; font-size: 11px; }
+.account-menu summary::-webkit-details-marker { display: none; }
+.account-menu summary > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu .avatar { flex: 0 0 auto; }
+.account-menu-popover { position: absolute; z-index: 20; top: calc(100% + 9px); right: 0; width: 220px; display: grid; gap: 10px; padding: 14px; background: white; border: 1px solid #e8ebf1; border-radius: 8px; box-shadow: 0 8px 25px #1824461c; }
+.account-menu-popover strong { overflow: hidden; text-overflow: ellipsis; color: #30394d; font-size: 11px; }
+.account-menu-popover small { color: #8993a3; font-size: 10px; }
+.account-menu-popover a, .account-menu-popover button { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 0; border: 0; background: transparent; text-align: left; color: #596477; font-size: 11px; }
+.account-menu-popover a:hover, .account-menu-popover button:hover { color: #4e72e8; }
+.auth-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at top left, #edf1ff, #f6f7fb 54%); }
+.auth-card { width: min(100%, 410px); padding: 34px; background: white; border: 1px solid #eceff4; border-radius: 12px; box-shadow: 0 12px 40px #18244612; }
+.auth-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 34px; color: #20283a; font-size: 18px; }
+.auth-brand .brand-mark { display: grid; place-items: center; }
+.auth-card > .eyebrow { color: #8793ab; }
+.auth-card h1 { margin: 8px 0; color: #20283a; font-size: 26px; }
+.auth-card > p { margin-bottom: 22px; color: #8993a3; font-size: 12px; }
+.auth-form { display: grid; gap: 15px; }
+.auth-form label, .user-create-form label { display: grid; gap: 7px; color: #596477; font-size: 11px; font-weight: 600; }
+.auth-form input, .user-create-form input, .user-create-form select { min-height: 38px; padding: 0 10px; color: #30394d; background: white; border: 1px solid #e4e8ef; border-radius: 6px; outline: none; font-size: 12px; }
+.auth-form input:focus, .user-create-form input:focus, .user-create-form select:focus { border-color: #aab8f1; box-shadow: 0 0 0 2px #5375e91a; }
+.auth-form .button { width: 100%; margin-top: 5px; }
+.user-create-form { display: grid; grid-template-columns: 1fr 1fr 190px auto; align-items: end; gap: 13px; padding: 21px; }
+.user-create-form small { color: #9aa3b1; font-size: 9px; font-weight: 400; }
+.user-create-form .button { white-space: nowrap; }
+.current-user-label { margin-left: 8px; color: #8190ae; font-size: 9px; font-weight: 400; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 1000px) {
@@ -286,6 +312,9 @@ h1, h2, p { margin-top: 0; }
     .inline-form { padding: 13px 15px; }
     .group-row, .channel-row { padding: 9px 15px; }
     .form-row { grid-template-columns: 1fr; }
+    .user-create-form { grid-template-columns: 1fr; align-items: stretch; }
+    .user-create-form .button { justify-self: start; }
+    .account-menu summary { max-width: 180px; }
     .routeros-list-heading { align-items: stretch; flex-direction: column; }
     .routeros-list-heading input { width: 100%; }
     .history-chart-heading { flex-direction: column; }

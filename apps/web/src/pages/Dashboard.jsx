@@ -4,6 +4,8 @@ import { Activity, AlertTriangle, BellRing, CirclePlus, Cpu, FileBarChart, Penci
 import { getSummary, getDevices } from "../api/dashboard";
 import api from "../api/client";
 import { formatDate, formatUptime } from "../utils/format";
+import AccountMenu from "../components/AccountMenu";
+import { useAuth } from "../auth/useAuth";
 
 const emptyDevice = {
     name: "",
@@ -148,10 +150,12 @@ function DeviceDialog({ device, onClose, onSaved }) {
 }
 
 export default function Dashboard() {
+    const { user } = useAuth();
     const [summary, setSummary] = useState(null);
     const [devices, setDevices] = useState([]);
     const [error, setError] = useState("");
     const [dialogDevice, setDialogDevice] = useState(undefined);
+    const canManage = user.role !== "VIEWER";
     const [refreshing, setRefreshing] = useState(false);
     const [polling, setPolling] = useState(false);
     const [filter, setFilter] = useState("ALL");
@@ -232,15 +236,15 @@ export default function Dashboard() {
             <section className="main-panel">
                 <header className="topbar">
                     <div className="breadcrumb">Workspace <span>/</span> <strong>Overview</strong></div>
-                    <div className="topbar-right"><span className="refresh-note"><i />Auto-refresh · 15s</span><button className="avatar" title="Network administrator">NA</button></div>
+                    <div className="topbar-right"><span className="refresh-note"><i />Auto-refresh · 15s</span><AccountMenu /></div>
                 </header>
                 <div className="page-content" id="overview">
                     <div className="page-heading">
                         <div><span className="eyebrow">NETWORK OPERATIONS</span><h1>Good {new Date().getHours() < 12 ? "morning" : "afternoon"} <span className="wave">✳</span></h1><p>Here&apos;s what&apos;s happening across your network.</p></div>
-                        <div className="heading-actions">
+                        {canManage && <div className="heading-actions">
                             <button className="button button-quiet" type="button" onClick={pollNow} disabled={polling}><RefreshCw size={16} className={polling ? "spin" : ""} />{polling ? "Polling..." : "Poll now"}</button>
                             <button className="button button-primary" type="button" onClick={() => setDialogDevice(null)}><CirclePlus size={17} />Add device</button>
-                        </div>
+                        </div>}
                     </div>
                     {error && <div className="notice-error" role="alert">{error}<button onClick={() => setError("")} aria-label="Dismiss"><X size={16} /></button></div>}
                     <div className="stats-grid">
@@ -263,10 +267,10 @@ export default function Dashboard() {
                                             <td><span className="cpu-value">{device.metrics?.cpu != null ? `${Number(device.metrics.cpu) / 10}%` : "—"}</span></td>
                                             <td>{formatUptime(device.metrics?.uptime)}</td>
                                             <td className="muted">{formatDate(device.lastSeen)}</td>
-                                            <td><div className="row-actions"><Link to={`/device/${device.id}`} className="icon-button" title="View device"><Cpu size={16} /></Link><button className="icon-button" title="Edit device" onClick={() => setDialogDevice(device)}><Pencil size={15} /></button><button className="icon-button danger-hover" title="Delete device" onClick={() => removeDevice(device)}><Trash2 size={15} /></button></div></td>
+                                            <td><div className="row-actions"><Link to={`/device/${device.id}`} className="icon-button" title="View device"><Cpu size={16} /></Link>{canManage && <><button className="icon-button" title="Edit device" onClick={() => setDialogDevice(device)}><Pencil size={15} /></button><button className="icon-button danger-hover" title="Delete device" onClick={() => removeDevice(device)}><Trash2 size={15} /></button></>}</div></td>
                                         </tr>
                                     ))}
-                                    {visibleDevices.length === 0 && <tr><td colSpan="6"><div className="empty-state"><span className="empty-icon"><Router size={23} /></span><strong>{devices.length === 0 ? "Your network is ready" : "No matching devices"}</strong><p>{devices.length === 0 ? "Add your first SNMP device to start monitoring." : "Try selecting a different status filter."}</p>{devices.length === 0 && <button className="button button-primary" onClick={() => setDialogDevice(null)}><CirclePlus size={16} />Add your first device</button>}</div></td></tr>}
+                                    {visibleDevices.length === 0 && <tr><td colSpan="6"><div className="empty-state"><span className="empty-icon"><Router size={23} /></span><strong>{devices.length === 0 ? "Your network is ready" : "No matching devices"}</strong><p>{devices.length === 0 ? "Add your first SNMP device to start monitoring." : "Try selecting a different status filter."}</p>{devices.length === 0 && canManage && <button className="button button-primary" onClick={() => setDialogDevice(null)}><CirclePlus size={16} />Add your first device</button>}</div></td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -274,7 +278,7 @@ export default function Dashboard() {
                     </section>
                 </div>
             </section>
-            {dialogDevice !== undefined && <DeviceDialog device={dialogDevice} onClose={() => setDialogDevice(undefined)} onSaved={load} />}
+            {dialogDevice !== undefined && canManage && <DeviceDialog device={dialogDevice} onClose={() => setDialogDevice(undefined)} onSaved={load} />}
         </main>
     );
 }

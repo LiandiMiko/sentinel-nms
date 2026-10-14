@@ -2,8 +2,12 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, ArrowLeft, Plus, Router, Search, Settings, ShieldAlert } from "lucide-react";
 import api from "../api/client";
+import AccountMenu from "../components/AccountMenu";
+import { useAuth } from "../auth/useAuth";
 
 export default function Discovery() {
+    const { user } = useAuth();
+    const canManage = user.role !== "VIEWER";
     const [form, setForm] = useState({ cidr: "192.168.1.0/24", community: "public", port: 161, version: "2c" });
     const [results, setResults] = useState([]);
     const [error, setError] = useState("");
@@ -63,12 +67,12 @@ export default function Discovery() {
                 <Link to="/settings" className="side-link"><Settings size={17} />Settings</Link>
             </aside>
             <section className="main-panel">
-                <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>Discovery</strong></div><Link to="/" className="button button-quiet"><ArrowLeft size={15} />Devices</Link></header>
+                <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>Discovery</strong></div><div className="topbar-right"><Link to="/" className="button button-quiet"><ArrowLeft size={15} />Devices</Link><AccountMenu /></div></header>
                 <div className="page-content">
                     <div className="page-heading"><div><span className="eyebrow">NETWORK INVENTORY</span><h1>SNMP discovery</h1><p>Find SNMP v1/v2c devices on a private IPv4 subnet.</p></div></div>
                     <div className="notice-warning">Only scan networks you own or are authorized to monitor. Discovery is restricted to RFC1918 private ranges of at most 256 addresses.</div>
                     {error && <div className="notice-error" role="alert">{error}</div>}
-                    <section className="phase2-card">
+                    {canManage && <section className="phase2-card">
                         <form className="rule-form discovery-form" onSubmit={scan}>
                             <label>Private IPv4 network<input name="cidr" value={form.cidr} onChange={update} placeholder="192.168.1.0/24" required /></label>
                             <label>SNMP version<select name="version" value={form.version} onChange={update}><option value="2c">SNMP v2c</option><option value="1">SNMP v1</option></select></label>
@@ -76,11 +80,11 @@ export default function Discovery() {
                             <label>SNMP port<input name="port" type="number" min="1" max="65535" value={form.port} onChange={update} required /></label>
                             <button className="button button-primary rule-submit" type="submit" disabled={scanning}><Search size={16} />{scanning ? "Scanning..." : "Scan private network"}</button>
                         </form>
-                    </section>
+                    </section>}
                     <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">SCAN RESULTS</span><h2>Discovered devices <span className="count-pill">{results.length}</span></h2></div></div>
                         <div className="table-wrap"><table className="device-table phase2-table"><thead><tr><th>IP ADDRESS</th><th>HOSTNAME</th><th>DESCRIPTION</th><th /></tr></thead><tbody>
-                            {results.map((device) => <tr key={device.ipAddress}><td><strong>{device.ipAddress}</strong></td><td>{device.hostname}</td><td>{device.description}</td><td><button className="button button-quiet small-button" disabled={device.added || adding === device.ipAddress} onClick={() => addDevice(device)}>{device.added ? "Added" : adding === device.ipAddress ? "Adding..." : <><Plus size={14} />Add device</>}</button></td></tr>)}
+                            {results.map((device) => <tr key={device.ipAddress}><td><strong>{device.ipAddress}</strong></td><td>{device.hostname}</td><td>{device.description}</td><td>{canManage && <button className="button button-quiet small-button" disabled={device.added || adding === device.ipAddress} onClick={() => addDevice(device)}>{device.added ? "Added" : adding === device.ipAddress ? "Adding..." : <><Plus size={14} />Add device</>}</button>}</td></tr>)}
                             {!results.length && <tr><td colSpan="4" className="table-empty">{scanning ? "Checking addresses for SNMP responses..." : "No results yet. Start a scan on an authorized private network."}</td></tr>}
                         </tbody></table></div>
                     </section>

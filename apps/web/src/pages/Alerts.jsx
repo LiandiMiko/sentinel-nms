@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, BellRing, CirclePlus, FileBarChart, Router, Search, Settings, ShieldAlert, Trash2 } from "lucide-react";
+import AccountMenu from "../components/AccountMenu";
+import { useAuth } from "../auth/useAuth";
 import {
     acknowledgeAlert,
     createAlertRule,
@@ -25,6 +27,8 @@ const initialRule = {
 };
 
 export default function Alerts() {
+    const { user } = useAuth();
+    const canManage = user.role !== "VIEWER";
     const [rules, setRules] = useState([]);
     const [events, setEvents] = useState([]);
     const [channels, setChannels] = useState([]);
@@ -124,13 +128,13 @@ export default function Alerts() {
                 <div className="sidebar-bottom"><span className="live-indicator"><i />Monitoring active</span><small>Sentinel NMS · Phase 2</small></div>
             </aside>
             <section className="main-panel">
-                <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>Alerts</strong></div><div className="topbar-right"><span className="avatar">NA</span></div></header>
+                <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>Alerts</strong></div><div className="topbar-right"><AccountMenu /></div></header>
                 <div className="page-content">
                     <div className="page-heading"><div><span className="eyebrow">INCIDENT MANAGEMENT</span><h1>Alerts</h1><p>Define thresholds and track network incidents.</p></div></div>
                     {error && <div className="notice-error" role="alert">{error}</div>}
                     <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">AUTOMATION</span><h2><BellRing size={18} /> Alert rules</h2></div></div>
-                        <form className="rule-form" onSubmit={saveRule}>
+                        {canManage && <form className="rule-form" onSubmit={saveRule}>
                             <label>Rule name<input name="name" value={form.name} onChange={update} placeholder="Core router CPU high" required maxLength="100" /></label>
                             <label>Condition<select name="type" value={form.type} onChange={update}><option value="CPU_ABOVE">CPU exceeds</option><option value="DEVICE_DOWN">Device offline</option></select></label>
                             {form.type === "CPU_ABOVE" ? <label>Threshold (%)<input name="threshold" type="number" min="0" max="100" value={form.threshold} onChange={update} required /></label> : <label>Offline duration (seconds)<input name="durationSeconds" type="number" min="0" max="86400" value={form.durationSeconds} onChange={update} /></label>}
@@ -138,7 +142,7 @@ export default function Alerts() {
                             <label>Group<select name="groupId" value={form.groupId} onChange={update}><option value="">All devices</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
                             <label>Notify<select multiple value={form.channelIds} onChange={(event) => setForm((previous) => ({ ...previous, channelIds: [...event.target.selectedOptions].map((option) => option.value) }))} aria-label="Notification channels">{channels.filter((channel) => channel.enabled).map((channel) => <option key={channel.id} value={channel.id}>{channel.name}</option>)}</select></label>
                             <button className="button button-primary rule-submit" type="submit" disabled={saving}><CirclePlus size={16} />{saving ? "Saving..." : "Create rule"}</button>
-                        </form>
+                        </form>}
                         <div className="table-wrap">
                             <table className="device-table phase2-table">
                                 <thead><tr><th>RULE</th><th>CONDITION</th><th>SEVERITY</th><th>SCOPE</th><th>CHANNELS</th><th>STATUS</th><th /></tr></thead>
@@ -148,8 +152,8 @@ export default function Alerts() {
                                     <td><span className={`severity ${rule.severity.toLowerCase()}`}>{rule.severity}</span></td>
                                     <td>{rule.group?.name ?? "All devices"}</td>
                                     <td>{rule.channels.map((item) => item.channel.name).join(", ") || "None"}</td>
-                                    <td><button className={`switch ${rule.enabled ? "on" : ""}`} type="button" onClick={() => toggleRule(rule)} aria-label={rule.enabled ? "Disable rule" : "Enable rule"}><i /></button></td>
-                                    <td><button className="icon-button danger-hover" title="Delete rule" onClick={() => removeRule(rule)}><Trash2 size={15} /></button></td>
+                                    <td>{canManage && <button className={`switch ${rule.enabled ? "on" : ""}`} type="button" onClick={() => toggleRule(rule)} aria-label={rule.enabled ? "Disable rule" : "Enable rule"}><i /></button>}</td>
+                                    <td>{canManage && <button className="icon-button danger-hover" title="Delete rule" onClick={() => removeRule(rule)}><Trash2 size={15} /></button>}</td>
                                 </tr>)}
                                 {rules.length === 0 && <tr><td colSpan="7" className="table-empty">No alert rules created yet.</td></tr>}</tbody>
                             </table>
@@ -158,7 +162,7 @@ export default function Alerts() {
                     <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">EVENT LOG</span><h2>Alert history</h2></div><select className="compact-select" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}><option value="">All states</option><option value="open">Open</option><option value="acknowledged">Acknowledged</option><option value="resolved">Resolved</option></select></div>
                         <div className="table-wrap"><table className="device-table phase2-table"><thead><tr><th>DEVICE</th><th>ALERT</th><th>SEVERITY</th><th>STATE</th><th>TRIGGERED</th><th /></tr></thead><tbody>
-                            {events.map((alert) => <tr key={alert.id}><td><strong>{alert.deviceName}</strong><small className="cell-subtitle">{alert.deviceIpAddress}</small></td><td>{alert.message}</td><td><span className={`severity ${alert.rule.severity.toLowerCase()}`}>{alert.rule.severity}</span></td><td><span className={`state-pill ${alert.state}`}>{alert.state}</span></td><td>{formatDate(alert.triggeredAt)}</td><td>{alert.state === "open" && <button className="button button-quiet small-button" onClick={() => ackAlert(alert)}>Acknowledge</button>}</td></tr>)}
+                            {events.map((alert) => <tr key={alert.id}><td><strong>{alert.deviceName}</strong><small className="cell-subtitle">{alert.deviceIpAddress}</small></td><td>{alert.message}</td><td><span className={`severity ${alert.rule.severity.toLowerCase()}`}>{alert.rule.severity}</span></td><td><span className={`state-pill ${alert.state}`}>{alert.state}</span></td><td>{formatDate(alert.triggeredAt)}</td><td>{canManage && alert.state === "open" && <button className="button button-quiet small-button" onClick={() => ackAlert(alert)}>Acknowledge</button>}</td></tr>)}
                             {events.length === 0 && <tr><td colSpan="6" className="table-empty">No alerts match this filter.</td></tr>}
                         </tbody></table></div>
                     </section>

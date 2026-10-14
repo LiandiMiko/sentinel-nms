@@ -6,6 +6,7 @@ import { getDevice } from "../api/dashboard";
 import { getMetricHistory, getInterfaces, getDeviceMetricSummary, getDeviceEvents } from "../api/metric";
 import api from "../api/client";
 import { formatDate, formatUptime } from "../utils/format";
+import AccountMenu from "../components/AccountMenu";
 
 function asTraffic(history) {
     return history.map((item, index) => {
@@ -249,7 +250,7 @@ export default function DeviceDetail() {
                 <div className="sidebar-bottom"><span className="live-indicator"><i />Monitoring active</span><small>Sentinel NMS · MVP</small></div>
             </aside>
             <section className="main-panel">
-                <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>{device?.name ?? "Device"}</strong></div><div className="topbar-right"><span className="refresh-note"><i />Auto-refresh · 15s</span><span className="avatar">NA</span></div></header>
+                <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>{device?.name ?? "Device"}</strong></div><div className="topbar-right"><span className="refresh-note"><i />Auto-refresh · 15s</span><AccountMenu /></div></header>
                 <div className="page-content detail-content" id="device-overview">
                     {error && <div className="notice-error" role="alert">{error}</div>}
                     {device && <>

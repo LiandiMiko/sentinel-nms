@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, Download, FileBarChart, Router, Search, Settings, ShieldAlert } from "lucide-react";
 import api from "../api/client";
+import AccountMenu from "../components/AccountMenu";
 
 function dateString(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -74,7 +75,7 @@ export default function Reports() {
                 <Link to="/settings" className="side-link"><Settings size={17} />Settings</Link>
             </aside>
             <section className="main-panel">
-                <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>Reports</strong></div></header>
+                <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>Reports</strong></div><div className="topbar-right"><AccountMenu /></div></header>
                 <div className="page-content">
                     <div className="page-heading"><div><span className="eyebrow">HISTORICAL DATA</span><h1>Reports</h1><p>Export metric history and alert events as Excel workbooks or PDF.</p></div></div>
                     {error && <div className="notice-error" role="alert">{error}</div>}

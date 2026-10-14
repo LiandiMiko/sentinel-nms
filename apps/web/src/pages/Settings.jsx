@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, BellRing, Check, CirclePlus, FileBarChart, Router, Search, Send, Settings as SettingsIcon, Trash2 } from "lucide-react";
 import { createGroup, createChannel, deleteChannel, deleteGroup, getChannels, getGroups, getSettings, testChannel, updateSettings } from "../api/phase2";
+import AccountMenu from "../components/AccountMenu";
+import { useAuth } from "../auth/useAuth";
 
 const emptyChannel = {
     name: "",
@@ -19,6 +21,9 @@ const emptyChannel = {
 };
 
 export default function Settings() {
+    const { user } = useAuth();
+    const canManage = user.role !== "VIEWER";
+    const canChangeSystemSettings = user.role === "SUPER_ADMIN";
     const [settings, setSettings] = useState(null);
     const [groups, setGroups] = useState([]);
     const [tags, setTags] = useState([]);
@@ -158,30 +163,30 @@ export default function Settings() {
                 <div className="sidebar-bottom"><span className="live-indicator"><i />Monitoring active</span><small>Sentinel NMS · Phase 2</small></div>
             </aside>
             <section className="main-panel">
-                <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>Settings</strong></div><div className="topbar-right"><span className="avatar">NA</span></div></header>
+                <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>Settings</strong></div><div className="topbar-right"><AccountMenu /></div></header>
                 <div className="page-content">
                     <div className="page-heading"><div><span className="eyebrow">SYSTEM CONFIGURATION</span><h1>Settings</h1><p>Manage polling, history retention, notification channels, and device groups.</p></div></div>
                     {error && <div className="notice-error" role="alert">{error}</div>}
                     {message && <div className="notice-success" role="status"><Check size={16} />{message}</div>}
                     {settings && <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">MONITORING</span><h2>Polling & data retention</h2></div></div>
-                        <form className="settings-form" onSubmit={saveSettings}>
+                        {canChangeSystemSettings ? <form className="settings-form" onSubmit={saveSettings}>
                             <label>Polling interval (seconds)<input type="number" min="15" max="3600" value={settings.pollingIntervalSeconds} onChange={(event) => setSettings({ ...settings, pollingIntervalSeconds: Number(event.target.value) })} /><small>Devices are polled at this interval (15–3600 seconds).</small></label>
                             <label>Metric retention (days)<input type="number" min="1" max="3650" value={settings.retentionDays} onChange={(event) => setSettings({ ...settings, retentionDays: Number(event.target.value) })} /><small>Older metric samples will be automatically removed (1–3650 days).</small></label>
                             <label className="checkbox-label"><input type="checkbox" checked={settings.retentionEnabled} onChange={(event) => setSettings({ ...settings, retentionEnabled: event.target.checked })} /> Enable automatic metric retention cleanup</label>
                             <button className="button button-primary" type="submit" disabled={saving}>{saving ? "Saving..." : "Save settings"}</button>
-                        </form>
+                        </form> : <p className="form-help settings-form">Only Super Admin can change global polling and retention settings.</p>}
                     </section>}
                     <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">ORGANIZATION</span><h2>Device groups</h2></div></div>
-                        <form className="inline-form" onSubmit={addGroup}><input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength="40" placeholder="New group name" required /><button className="button button-primary" type="submit"><CirclePlus size={16} />Add group</button></form>
-                        <div className="group-list">{groups.map((group) => <div className="group-row" key={group.id}><span className="group-avatar"><Router size={16} /></span><span className="group-name">{group.name}<small>{group._count.devices} devices</small></span><button className="icon-button danger-hover" title="Delete group" onClick={() => removeGroup(group)}><Trash2 size={15} /></button></div>)}{groups.length === 0 && <p className="table-empty">No groups yet. Add a group, then assign devices from the device editor.</p>}</div>
+                        {canManage && <form className="inline-form" onSubmit={addGroup}><input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength="40" placeholder="New group name" required /><button className="button button-primary" type="submit"><CirclePlus size={16} />Add group</button></form>}
+                        <div className="group-list">{groups.map((group) => <div className="group-row" key={group.id}><span className="group-avatar"><Router size={16} /></span><span className="group-name">{group.name}<small>{group._count.devices} devices</small></span>{canManage && <button className="icon-button danger-hover" title="Delete group" onClick={() => removeGroup(group)}><Trash2 size={15} /></button>}</div>)}{groups.length === 0 && <p className="table-empty">No groups yet. Add a group, then assign devices from the device editor.</p>}</div>
                         <div className="tag-summary"><strong>Tags</strong><span>{tags.length} shared tags in use</span>{tags.map((tag) => <span className="tag-pill" key={tag.id}>{tag.name} · {tag._count.devices}</span>)}</div>
                     </section>
                     <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">DELIVERY</span><h2>Notification channels</h2><p>Channel credentials are encrypted using ALERT_ENCRYPTION_KEY.</p></div></div>
-                        <div className="channel-list">{channels.map((channel) => <div className="channel-row" key={channel.id}><span className="channel-icon"><Send size={16} /></span><span className="channel-name">{channel.name}<small>{channel.type} · {channel.lastError ? "Last delivery failed" : channel.lastSentAt ? "Last sent " + new Date(channel.lastSentAt).toLocaleString() : "Not sent yet"}</small></span><button className="button button-quiet small-button" onClick={() => runChannelTest(channel)}>Test</button><button className="icon-button danger-hover" title="Delete channel" onClick={() => removeChannel(channel)}><Trash2 size={15} /></button></div>)}{channels.length === 0 && <p className="table-empty">No notification channels configured.</p>}</div>
-                        <form className="channel-form" onSubmit={addChannel}>
+                        <div className="channel-list">{channels.map((channel) => <div className="channel-row" key={channel.id}><span className="channel-icon"><Send size={16} /></span><span className="channel-name">{channel.name}<small>{channel.type} · {channel.lastError ? "Last delivery failed" : channel.lastSentAt ? "Last sent " + new Date(channel.lastSentAt).toLocaleString() : "Not sent yet"}</small></span>{canManage && <><button className="button button-quiet small-button" onClick={() => runChannelTest(channel)}>Test</button><button className="icon-button danger-hover" title="Delete channel" onClick={() => removeChannel(channel)}><Trash2 size={15} /></button></>}</div>)}{channels.length === 0 && <p className="table-empty">No notification channels configured.</p>}</div>
+                        {canManage && <form className="channel-form" onSubmit={addChannel}>
                             <div className="phase2-section-heading"><h3>Add notification channel</h3></div>
                             <div className="form-row"><label>Name<input name="name" value={channelForm.name} onChange={updateChannel} required maxLength="80" /></label><label>Type<select name="type" value={channelForm.type} onChange={updateChannel}><option value="WEBHOOK">Webhook</option><option value="TELEGRAM">Telegram</option><option value="EMAIL">Email (SMTP)</option></select></label></div>
                             {channelForm.type === "WEBHOOK" && <label>Webhook URL<input type="url" name="url" value={channelForm.url} onChange={updateChannel} required placeholder="https://example.com/webhook" /></label>}
@@ -193,7 +198,7 @@ export default function Settings() {
                                 <label className="checkbox-label"><input name="secure" type="checkbox" checked={channelForm.secure} onChange={updateChannel} /> Use secure TLS connection</label>
                             </>}
                             <button className="button button-primary" type="submit"><CirclePlus size={16} />Save channel</button>
-                        </form>
+                        </form>}
                     </section>
                 </div>
             </section>
