@@ -20,28 +20,21 @@ Requirements: Node.js 22 or newer and npm.
 npm ci
 ```
 
-Create `apps/api/.env`:
-
-```dotenv
-DATABASE_URL="file:./dev.db"
-PORT=3000
-```
-
-Then initialize the local database and start each workspace:
+Start the API. On first run, the development command generates the Prisma client and applies migrations automatically. It uses `apps/api/prisma/dev.db` by default:
 
 ```sh
-npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma
-npx prisma generate --schema=apps/api/prisma/schema.prisma
-npm run dev --workspace=api
+npm run api
 ```
 
-In a second terminal:
+In a second terminal, start the web app:
 
 ```sh
-npm run dev --workspace=web
+npm run web
 ```
 
-The Vite development server uses `/api/v1` on the same origin by default. Set `VITE_API_URL` if the API is hosted elsewhere.
+Open `http://localhost:5173`. The Vite development server proxies `/api/v1` to `http://localhost:3000`. To use a different API host, set `API_PROXY_TARGET` before starting the web workspace.
+
+Optional API configuration can be provided in `apps/api/.env`; start from `apps/api/.env.example`. `DATABASE_URL` is required in production and defaults to a local SQLite database only in development.
 
 ## Current capabilities
 

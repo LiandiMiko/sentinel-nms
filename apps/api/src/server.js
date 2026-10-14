@@ -1,16 +1,14 @@
 import express from "express";
-import dotenv from "dotenv";
 import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
+import env from "./core/config/env.js";
 import { errorHandler } from "./core/middleware/error-handler.js";
 import { notFoundHandler } from "./core/middleware/not-found-handler.js";
 import deviceRoutes from "./modules/devices/device.routes.js";
 import metricRoutes from "./modules/metrics/metric.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import schedulerService from "./modules/scheduler/scheduler.service.js";
-
-dotenv.config();
 
 const app = express();
 
@@ -44,7 +42,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 schedulerService.start();
 
-const PORT = process.env.PORT || 3000;
+const PORT = env.port;
 
 process.on("uncaughtException", (err) => {
     console.error("=== UNCAUGHT EXCEPTION ===");
@@ -62,6 +60,6 @@ app.listen(PORT, () => {
     console.log("======================================");
     console.log("Status : Running");
     console.log("Port   : " + PORT);
-    console.log("Mode   : " + (process.env.NODE_ENV || "development"));
+    console.log("Mode   : " + env.nodeEnv);
     console.log("======================================\n");
 });
