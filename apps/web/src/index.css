@@ -53,6 +53,42 @@ h1, h2, p { margin-top: 0; }
 .button-quiet { background: #fff; border-color: #e8ebf1; color: #596477; }
 .button-quiet:hover { background: #f7f8fb; }
 .stats-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 15px; margin-bottom: 34px; }
+.group-health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    padding: 16px 20px 20px;
+}
+.group-health-card {
+    text-align: left;
+    border: 1px solid #e8ebf1;
+    border-radius: 8px;
+    background: #fafbfe;
+    padding: 14px 14px 12px;
+    display: grid;
+    gap: 6px;
+    cursor: pointer;
+    color: inherit;
+}
+.group-health-card:hover {
+    border-color: #c9d3f0;
+    background: #f3f6ff;
+}
+.group-health-card strong {
+    font-size: 13px;
+    color: #30394d;
+}
+.group-health-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.group-health-card small {
+    color: #929baa;
+    font-size: 10px;
+}
 .stat-card { min-height: 146px; background: white; border: 1px solid #eceff4; border-radius: 10px; padding: 17px 18px; display: grid; grid-template-columns: 36px 1fr; grid-template-rows: 28px 37px 20px; column-gap: 10px; box-shadow: 0 2px 6px #18244605; }
 .stat-card[href]:hover { border-color: #d8def7; box-shadow: 0 4px 12px #1824460c; }
 .stat-icon, .detail-stat-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; grid-row: 1 / 2; }

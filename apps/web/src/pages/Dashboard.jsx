@@ -310,6 +310,40 @@ const visibleDevices = devices;
                                 : <article className="stat-card" key={label}><div className={`stat-icon ${color}`}><Icon size={18} /></div><span className="stat-label">{label}</span><strong className="stat-value">{value.toLocaleString()}</strong><span className="stat-caption">{label === "Metrics collected" ? "historical data points" : label === "Total devices" ? "registered in inventory" : "currently reporting"}</span></article>
                         ))}
                     </div>
+                                        {summary?.groups?.length > 0 && (
+                        <section className="phase2-card" aria-labelledby="group-health-title">
+                            <div className="phase2-section-heading">
+                                <div>
+                                    <span className="eyebrow">SITES & TEAMS</span>
+                                    <h2 id="group-health-title">Group health</h2>
+                                </div>
+                            </div>
+                            <div className="group-health-grid">
+                                {summary.groups.map((group) => (
+                                    <button
+                                        key={group.id}
+                                        type="button"
+                                        className="group-health-card"
+                                        onClick={() => {
+                                            if (group.id !== "__ungrouped__") {
+                                                setGroupFilter(group.id);
+                                                setFilter("ALL");
+                                            }
+                                        }}
+                                        title={group.id === "__ungrouped__" ? "Devices without a group" : `Filter devices in ${group.name}`}
+                                    >
+                                        <strong>{group.name}</strong>
+                                        <span className="group-health-counts">
+                                            <span className="health-up">{group.up} up</span>
+                                            <span className="health-down">{group.down} down</span>
+                                            {group.disabled > 0 && <span className="muted">{group.disabled} disabled</span>}
+                                        </span>
+                                        <small>{group.total} device{group.total === 1 ? "" : "s"}</small>
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+                    )}
                                         <section className="phase2-card operations-health" aria-labelledby="operations-health-title">
                         <div className="phase2-section-heading">
                             <div><span className="eyebrow">SYSTEM HEALTH</span><h2 id="operations-health-title">Polling worker</h2></div>
