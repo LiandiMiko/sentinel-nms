@@ -76,13 +76,14 @@ h1, h2, p { margin-top: 0; }
 .search-control input { width: 160px; border: 0; outline: 0; color: #586274; font-size: 11px; background: transparent; }
 .operations-health { padding-bottom: 16px; }
 .operations-health .phase2-section-heading { padding-bottom: 14px; }
-.operations-health-grid { padding: 16px 20px 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.operations-health-grid { padding: 16px 20px 10px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .operations-health-grid > div { min-width: 0; display: grid; gap: 6px; }
 .operations-health-grid span { color: #8791a2; font-size: 11px; }
 .operations-health-grid strong { color: #30394d; font-size: 14px; overflow-wrap: anywhere; }
 .operations-health-grid small { color: #929baa; font-size: 10px; line-height: 1.5; }
 .operations-health-grid .health-up { color: #269669; }
 .operations-health-grid .health-down { color: #d56e5f; }
+.operations-health-grid .health-warn { color: #c48a1a; }
 .operations-health > .form-help { padding: 0 20px; margin: 4px 0 0; }
 .storage-estimate { display: grid; gap: 6px; padding: 13px 15px; border: 1px solid #e8ebf1; border-radius: 8px; background: #fafbfe; color: #697487; font-size: 11px; }
 .storage-estimate strong { color: #30394d; font-size: 12px; }

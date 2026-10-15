@@ -310,7 +310,7 @@ const visibleDevices = devices;
                                 : <article className="stat-card" key={label}><div className={`stat-icon ${color}`}><Icon size={18} /></div><span className="stat-label">{label}</span><strong className="stat-value">{value.toLocaleString()}</strong><span className="stat-caption">{label === "Metrics collected" ? "historical data points" : label === "Total devices" ? "registered in inventory" : "currently reporting"}</span></article>
                         ))}
                     </div>
-                    <section className="phase2-card operations-health" aria-labelledby="operations-health-title">
+                                        <section className="phase2-card operations-health" aria-labelledby="operations-health-title">
                         <div className="phase2-section-heading">
                             <div><span className="eyebrow">SYSTEM HEALTH</span><h2 id="operations-health-title">Polling worker</h2></div>
                             <button className="icon-button" onClick={load} title="Refresh system health" disabled={refreshing}><RefreshCw size={16} className={refreshing ? "spin" : ""} /></button>
@@ -320,7 +320,33 @@ const visibleDevices = devices;
                                 <div><span>Worker</span><strong className={operationsHealth.worker.alive ? "health-up" : "health-down"}>{operationsHealth.worker.alive ? "Running" : "Not responding"}</strong><small>Heartbeat {formatDate(operationsHealth.worker.lastHeartbeatAt)}</small></div>
                                 <div><span>Queue depth</span><strong>{operationsHealth.queue.pending + operationsHealth.queue.processing + operationsHealth.queue.retryWait}</strong><small>{operationsHealth.queue.pending} pending · {operationsHealth.queue.processing} processing · {operationsHealth.queue.retryWait} retry wait</small></div>
                                 <div><span>Last successful poll</span><strong>{operationsHealth.lastSuccessfulPollAt ? formatDate(operationsHealth.lastSuccessfulPollAt) : "Not yet"}</strong><small>{operationsHealth.consecutiveFailedJobs ? `${operationsHealth.consecutiveFailedJobs} consecutive failed job(s)` : "No consecutive job failures"}</small></div>
+                                <div>
+                                    <span>Meta-alerts</span>
+                                    <strong className={
+                                        operationsHealth.metaAlerts?.status === "firing" ? "health-down"
+                                            : operationsHealth.metaAlerts?.status === "no-channels" || operationsHealth.metaAlerts?.status === "degraded" ? "health-warn"
+                                                : "health-up"
+                                    }>
+                                        {operationsHealth.metaAlerts?.status === "firing" ? "Alert active"
+                                            : operationsHealth.metaAlerts?.status === "no-channels" ? "No channels"
+                                                : operationsHealth.metaAlerts?.status === "degraded" ? "Watching (degraded)"
+                                                    : "Watching"}
+                                    </strong>
+                                    <small>
+                                        {operationsHealth.metaAlerts?.notificationsConfigured
+                                            ? `Channels ready · fire after worker stale or ${operationsHealth.metaAlerts?.failureStreakThreshold ?? 3}+ failed jobs`
+                                            : "Configure an enabled Telegram, email, or webhook channel to receive pages"}
+                                    </small>
+                                </div>
                             </div>
+                            {operationsHealth.metaAlerts?.summary && (
+                                <p className={operationsHealth.metaAlerts.status === "firing" ? "notice-error" : "form-help"} role="status" style={{ marginTop: 12 }}>
+                                    {operationsHealth.metaAlerts.summary}
+                                    {!operationsHealth.metaAlerts.notificationsConfigured && (
+                                        <> {" "}<Link to="/settings">Open settings</Link></>
+                                    )}
+                                </p>
+                            )}
                             {operationsHealth.latestJob && <p className="form-help">Latest job: {operationsHealth.latestJob.status} · attempt {operationsHealth.latestJob.attempts}/{operationsHealth.latestJob.maxAttempts}{operationsHealth.latestJob.nextAttemptAt ? ` · retry at ${formatDate(operationsHealth.latestJob.nextAttemptAt)}` : ""}</p>}
                         </> : <p className="notice-error" role="alert">System health information is unavailable. Check the API connection and refresh.</p>}
                     </section>

@@ -2,6 +2,9 @@ import prisma from "../../core/database/prisma.js";
 
 const WORKER_HEARTBEAT_KEY = "workerHeartbeatAt";
 const WORKER_STALE_AFTER_MS = 30_000;
+const META_WORKER_KEY = "operationalMeta.workerOffline";
+const META_FAILURE_KEY = "operationalMeta.pollFailureStreak";
+const FAILURE_STREAK_THRESHOLD = 3;
 
 export async function recordWorkerHeartbeat(database = prisma, now = new Date()) {
     await database.systemSetting.upsert({
@@ -13,7 +16,7 @@ export async function recordWorkerHeartbeat(database = prisma, now = new Date())
 
 class OperationsHealthService {
     async get() {
-        const [heartbeat, queueRows, recentJobs, latestJobRows, latestSuccessfulRows, databaseStats] = await Promise.all([
+        const [heartbeat, queueRows, recentJobs, latestJobRows, latestSuccessfulRows, databaseStats, metaWorker, metaFailures, channelCount] = await Promise.all([
             prisma.systemSetting.findUnique({ where: { key: WORKER_HEARTBEAT_KEY } }),
             prisma.$queryRaw`
                 SELECT "status", COUNT(*) AS "count"
@@ -42,7 +45,10 @@ class OperationsHealthService {
                 ORDER BY "completedAt" DESC
                 LIMIT 1
             `,
-            prisma.$queryRaw`PRAGMA page_count`
+            prisma.$queryRaw`PRAGMA page_count`,
+            prisma.systemSetting.findUnique({ where: { key: META_WORKER_KEY } }),
+            prisma.systemSetting.findUnique({ where: { key: META_FAILURE_KEY } }),
+            prisma.notificationChannel.count({ where: { enabled: true } })
         ]);
         const pageSizeRows = await prisma.$queryRaw`PRAGMA page_size`;
         const queue = { pending: 0, processing: 0, retryWait: 0 };
@@ -61,9 +67,33 @@ class OperationsHealthService {
         const pageCount = Number(databaseStats[0]?.page_count ?? 0);
         const pageSize = Number(pageSizeRows[0]?.page_size ?? 0);
 
+        const workerAlive = heartbeatAgeMs !== null && heartbeatAgeMs <= WORKER_STALE_AFTER_MS;
+        const workerOfflineActive = metaWorker?.value === "true";
+        const pollFailureActive = metaFailures?.value === "true";
+        const notificationsConfigured = channelCount > 0;
+
+        let metaStatus = "watching";
+        let metaSummary = "Meta-alerts are watching the worker and poll job streak.";
+        if (!notificationsConfigured) {
+            metaStatus = "no-channels";
+            metaSummary = "No enabled notification channels. Meta-alerts will not be delivered.";
+        } else if (workerOfflineActive || pollFailureActive) {
+            metaStatus = "firing";
+            const parts = [];
+            if (workerOfflineActive) parts.push("worker offline");
+            if (pollFailureActive) parts.push(`${consecutiveFailedJobs || "several"} consecutive poll failures`);
+            metaSummary = `Active: ${parts.join(" · ")}. Notifications were sent to enabled channels.`;
+        } else if (!workerAlive) {
+            metaStatus = "degraded";
+            metaSummary = "Worker heartbeat is stale. A meta-alert will fire after the API startup grace period if this continues.";
+        } else if (consecutiveFailedJobs >= FAILURE_STREAK_THRESHOLD) {
+            metaStatus = "degraded";
+            metaSummary = `${consecutiveFailedJobs} consecutive failed jobs detected. Meta-alert state is updating.`;
+        }
+
         return {
             worker: {
-                alive: heartbeatAgeMs !== null && heartbeatAgeMs <= WORKER_STALE_AFTER_MS,
+                alive: workerAlive,
                 lastHeartbeatAt: heartbeatAt,
                 heartbeatAgeSeconds: heartbeatAgeMs === null ? null : Math.floor(heartbeatAgeMs / 1000)
             },
@@ -71,7 +101,15 @@ class OperationsHealthService {
             lastSuccessfulPollAt: latestSuccessfulRows[0]?.completedAt ?? null,
             consecutiveFailedJobs,
             latestJob: latestJobRows[0] ?? null,
-            databaseBytes: pageCount * pageSize
+            databaseBytes: pageCount * pageSize,
+            metaAlerts: {
+                status: metaStatus,
+                summary: metaSummary,
+                notificationsConfigured,
+                workerOffline: workerOfflineActive,
+                pollFailureStreak: pollFailureActive,
+                failureStreakThreshold: FAILURE_STREAK_THRESHOLD
+            }
         };
     }
 }
