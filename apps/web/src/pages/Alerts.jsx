@@ -14,6 +14,7 @@ import {
     updateAlertRule
 } from "../api/phase2";
 import { formatDate } from "../utils/format";
+import EmptyState from "../components/EmptyState";
 
 const initialRule = {
     name: "",
@@ -135,7 +136,7 @@ export default function Alerts() {
                 <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>Alerts</strong></div><div className="topbar-right"><AccountMenu /></div></header>
                 <div className="page-content">
                     <div className="page-heading"><div><span className="eyebrow">INCIDENT MANAGEMENT</span><h1>Alerts</h1><p>Define thresholds and track network incidents.</p></div></div>
-                    {error && <div className="notice-error" role="alert">{error}</div>}
+                    {error && <div className="notice-error" role="alert">{error}<button type="button" onClick={() => setError("")} aria-label="Dismiss error">Dismiss</button></div>}
                     <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">AUTOMATION</span><h2><BellRing size={18} /> Alert rules</h2></div></div>
                         {canManage && <form className="rule-form" onSubmit={saveRule}>
@@ -159,7 +160,7 @@ export default function Alerts() {
                                     <td>{canManage && <button className={`switch ${rule.enabled ? "on" : ""}`} type="button" onClick={() => toggleRule(rule)} aria-label={rule.enabled ? "Disable rule" : "Enable rule"}><i /></button>}</td>
                                     <td>{canManage && <button className="icon-button danger-hover" title="Delete rule" onClick={() => removeRule(rule)}><Trash2 size={15} /></button>}</td>
                                 </tr>)}
-                                {rules.length === 0 && <tr><td colSpan="7" className="table-empty">{loading ? "Loading alert rules..." : "No alert rules created yet."}</td></tr>}</tbody>
+                                {rules.length === 0 && <tr><td colSpan="7" className="table-empty-cell">{loading ? <span className="loading-inline" style={{ margin: 0, border: 0, background: "transparent", justifyContent: "center" }}>Loading alert rules...</span> : <EmptyState icon={BellRing} title="No alert rules yet" description={canManage ? "Create a rule above to watch CPU thresholds or device offline conditions." : "An administrator has not configured alert rules yet."} />}</td></tr>}</tbody>
                             </table>
                         </div>
                     </section>
@@ -167,7 +168,7 @@ export default function Alerts() {
                         <div className="phase2-section-heading"><div><span className="eyebrow">EVENT LOG</span><h2>Alert history</h2></div><select className="compact-select" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}><option value="">All states</option><option value="open">Open</option><option value="acknowledged">Acknowledged</option><option value="resolved">Resolved</option></select></div>
                         <div className="table-wrap"><table className="device-table phase2-table"><thead><tr><th>DEVICE</th><th>ALERT</th><th>SEVERITY</th><th>STATE</th><th>TRIGGERED</th><th /></tr></thead><tbody>
                             {events.map((alert) => <tr key={alert.id}><td><strong>{alert.deviceName}</strong><small className="cell-subtitle">{alert.deviceIpAddress}</small></td><td>{alert.message}</td><td><span className={`severity ${alert.rule.severity.toLowerCase()}`}>{alert.rule.severity}</span></td><td><span className={`state-pill ${alert.state}`}>{alert.state}</span></td><td>{formatDate(alert.triggeredAt)}</td><td>{canManage && alert.state === "open" && <button className="button button-quiet small-button" onClick={() => ackAlert(alert)}>Acknowledge</button>}</td></tr>)}
-                            {events.length === 0 && <tr><td colSpan="6" className="table-empty">{loading ? "Loading alert history..." : "No alerts match this filter."}</td></tr>}
+                            {events.length === 0 && <tr><td colSpan="6" className="table-empty-cell">{loading ? <span className="loading-inline" style={{ margin: 0, border: 0, background: "transparent", justifyContent: "center" }}>Loading alert history...</span> : <EmptyState icon={ShieldAlert} title={stateFilter ? "No alerts for this filter" : "No alert events yet"} description={stateFilter ? "Try another state filter, or clear the filter to see the full history." : "When a rule condition is met, open incidents will appear here."} />}</td></tr>}
                         </tbody></table></div>
                     </section>
                 </div>
