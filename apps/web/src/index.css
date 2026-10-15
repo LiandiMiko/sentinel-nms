@@ -193,6 +193,9 @@ h1, h2, p { margin-top: 0; }
 .phase2-table td { white-space: normal; min-width: 80px; }
 .phase2-table td strong { color: #364054; font-size: 11px; }
 .table-empty { text-align: center !important; color: #969eac !important; padding: 26px !important; }
+.table-empty-cell { padding: 8px 12px !important; }
+.table-empty-cell .empty-state { min-height: 160px; }
+.empty-state-action { margin-top: 4px; }
 .severity, .state-pill { display: inline-flex; padding: 4px 7px; border-radius: 12px; font-size: 9px; font-weight: 700; }
 .severity.low { color: #5774c8; background: #edf1ff; }.severity.medium { color: #b27c25; background: #fff5e4; }.severity.high { color: #c35c48; background: #fff0ed; }.severity.critical { color: #a3313a; background: #ffe8eb; }
 .state-pill.open { color: #bb5343; background: #fff0ed; }.state-pill.acknowledged { color: #9d742d; background: #fff5e4; }.state-pill.resolved { color: #258461; background: #eaf8f1; }
