@@ -103,6 +103,10 @@ export default function DeviceDetail() {
     const [interfaces, setInterfaces] = useState([]);
     const [deviceMetrics, setDeviceMetrics] = useState(null);
     const [deviceEvents, setDeviceEvents] = useState([]);
+    const [eventTypeFilter, setEventTypeFilter] = useState("ALL");
+    const [eventStatusFilter, setEventStatusFilter] = useState("ALL");
+    const [eventSearch, setEventSearch] = useState("");
+    const [eventShowAll, setEventShowAll] = useState(false);
     const [selectedInterface, setSelectedInterface] = useState("");
     const [selectedWindow, setSelectedWindow] = useState(String(60 * 60));
     const [rangeSeconds, setRangeSeconds] = useState(60 * 60);
@@ -237,6 +241,23 @@ export default function DeviceDetail() {
         !normalizedRouterOsFilter
         || Object.values(item).join(" ").toLowerCase().includes(normalizedRouterOsFilter)
     ));
+        const eventSearchNormalized = eventSearch.trim().toLowerCase();
+    const filteredEvents = deviceEvents.filter((event) => {
+        if (eventTypeFilter === "device" && event.type !== "device-outage") return false;
+        if (eventTypeFilter === "interface" && event.type !== "interface-outage") return false;
+        if (eventStatusFilter === "open" && event.resolvedAt) return false;
+        if (eventStatusFilter === "resolved" && !event.resolvedAt) return false;
+        if (eventSearchNormalized) {
+            const haystack = [event.subject, event.message, event.type]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase();
+            if (!haystack.includes(eventSearchNormalized)) return false;
+        }
+        return true;
+    });
+    // Default: 10 terbaru (API sudah order startedAt desc)
+    const visibleEvents = eventShowAll ? filteredEvents : filteredEvents.slice(0, 10);
 
     if (!device && !error) return <main className="detail-shell"><div className="loading-state">Loading device...</div></main>;
 
@@ -363,19 +384,96 @@ export default function DeviceDetail() {
                                 {interfaces.length === 0 && <tr><td colSpan="9" className="table-empty">No interface information has been collected yet.</td></tr>}</tbody>
                             </table></div>
                         </section>
-                        <section className="chart-card inventory-card">
-                            <div className="chart-heading"><div><span className="eyebrow">AVAILABILITY HISTORY</span><h2>Outage log <span className="count-pill">{deviceEvents.length}</span></h2><p>Device and interface outages observed during polling. Recovery duration is estimated from the first failed poll to the first successful poll.</p></div></div>
-                            <div className="table-wrap"><table className="device-table phase2-table outage-table">
-                                <thead><tr><th>DEVICE / PORT</th><th>OUTAGE START</th><th>RECOVERY</th><th>DURATION</th><th>DETAIL</th></tr></thead>
-                                <tbody>{deviceEvents.map((event) => <tr key={event.id}>
-                                    <td><strong>{event.type === "device-outage" ? "Device" : "Port"}: {event.subject}</strong></td>
-                                    <td>{formatDate(event.startedAt)}</td>
-                                    <td>{event.resolvedAt ? formatDate(event.resolvedAt) : <span className="outage-active">Still down</span>}</td>
-                                    <td>{formatDuration(event.startedAt, event.resolvedAt ?? new Date())}</td>
-                                    <td>{event.message}</td>
-                                </tr>)}
-                                {deviceEvents.length === 0 && <tr><td colSpan="5" className="table-empty">No outages have been recorded since event logging was enabled.</td></tr>}</tbody>
-                            </table></div>
+                                                <section className="chart-card inventory-card">
+                            <div className="chart-heading">
+                                <div>
+                                    <span className="eyebrow">AVAILABILITY HISTORY</span>
+                                    <h2>Outage log <span className="count-pill">{filteredEvents.length}</span></h2>
+                                    <p>All qualifying outages are stored. Showing the latest 10 by default; use filters to narrow the list.</p>
+                                </div>
+                                <div className="section-controls device-filters" style={{ flexWrap: "wrap", gap: 8 }}>
+                                    <label className="search-control">
+                                        <input
+                                            type="search"
+                                            value={eventSearch}
+                                            onChange={(e) => setEventSearch(e.target.value)}
+                                            placeholder="Search subject or detail"
+                                            aria-label="Search outage log"
+                                        />
+                                    </label>
+                                    <select
+                                        value={eventTypeFilter}
+                                        onChange={(e) => setEventTypeFilter(e.target.value)}
+                                        aria-label="Filter by outage type"
+                                    >
+                                        <option value="ALL">All types</option>
+                                        <option value="device">Device</option>
+                                        <option value="interface">Port / interface</option>
+                                    </select>
+                                    <select
+                                        value={eventStatusFilter}
+                                        onChange={(e) => setEventStatusFilter(e.target.value)}
+                                        aria-label="Filter by status"
+                                    >
+                                        <option value="ALL">All statuses</option>
+                                        <option value="open">Still down</option>
+                                        <option value="resolved">Recovered</option>
+                                    </select>
+                                    <button
+                                        className="button button-quiet"
+                                        type="button"
+                                        onClick={() => setEventShowAll((v) => !v)}
+                                    >
+                                        {eventShowAll ? "Show 10 latest" : `Show all (${filteredEvents.length})`}
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="table-wrap">
+                                <table className="device-table phase2-table outage-table">
+                                    <thead>
+                                        <tr>
+                                            <th>DEVICE / PORT</th>
+                                            <th>OUTAGE START</th>
+                                            <th>RECOVERY</th>
+                                            <th>DURATION</th>
+                                            <th>DETAIL</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {visibleEvents.map((event) => (
+                                            <tr key={event.id}>
+                                                <td>
+                                                    <strong>
+                                                        {event.type === "device-outage" ? "Device" : "Port"}: {event.subject}
+                                                    </strong>
+                                                </td>
+                                                <td>{formatDate(event.startedAt)}</td>
+                                                <td>
+                                                    {event.resolvedAt
+                                                        ? formatDate(event.resolvedAt)
+                                                        : <span className="outage-active">Still down</span>}
+                                                </td>
+                                                <td>{formatDuration(event.startedAt, event.resolvedAt ?? new Date())}</td>
+                                                <td>{event.message}</td>
+                                            </tr>
+                                        ))}
+                                        {filteredEvents.length === 0 && (
+                                            <tr>
+                                                <td colSpan="5" className="table-empty">
+                                                    {deviceEvents.length === 0
+                                                        ? "No outages have been recorded since event logging was enabled."
+                                                        : "No outages match these filters."}
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {!eventShowAll && filteredEvents.length > 10 && (
+                                <p className="form-help" style={{ marginTop: 8 }}>
+                                    Showing 10 of {filteredEvents.length} matching events.
+                                </p>
+                            )}
                         </section>
                         <div className="detail-footer"><Gauge size={15} />Polling every 30 seconds <span>·</span> Last update {formatDate(device.lastSeen)}</div>
                     </>}
