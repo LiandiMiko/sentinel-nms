@@ -21,7 +21,7 @@ docker compose up --build
 
 Compose starts the API, a separate polling worker, and the web app. The worker starts after the API has applied database migrations and passed its health check.
 
-Open `http://localhost:8080` and sign in with that account. The initial account is created as Super Admin only when the database has no users; the password is never reset from environment variables on later restarts. Remove `AUTH_INITIAL_ADMIN_PASSWORD` from the environment after the first successful startup. Set `AUTH_COOKIE_SECURE=true` when serving the site over HTTPS, and set `WEB_ORIGINS` to the exact public web origin(s), comma-separated. Set `WEB_PORT` to change the published port. SQLite data is stored in the `sentinel_data` volume and database migrations are applied when the API starts.
+Open `http://localhost:8080` and sign in with that account. The initial account is created as Super Admin only when the database has no users; the password is never reset from environment variables on later restarts. Remove `AUTH_INITIAL_ADMIN_PASSWORD` from the environment after the first successful startup. Set `AUTH_COOKIE_SECURE=true` when serving the site over HTTPS, and set `WEB_ORIGINS` to the exact public web origin(s), comma-separated. Set `WEB_PORT` to change the published port. SQLite data and daily database backups are stored in the persistent `sentinel_data` volume; backups are retained for seven days by default. Database migrations are applied when the API starts.
 
 ## Run locally
 
@@ -38,10 +38,18 @@ npm ci
 Create the local API environment file from the example:
 
 ```powershell
-Copy-Item apps/api/.env.example apps/api/.env
+Copy-Item apps\api\.env.example apps\api\.env
 ```
 
 Edit `apps/api/.env` and set `AUTH_INITIAL_ADMIN_EMAIL` and a unique `AUTH_INITIAL_ADMIN_PASSWORD` of at least 12 characters. This account is created only if the database has no users. Keep the database URL from the example to use the local SQLite database at `apps/api/prisma/dev.db`.
+
+Before starting the API for the first time, run the configuration preflight:
+
+```powershell
+npm run preflight
+```
+
+It validates the initial admin settings, port/origins, backup retention, and encryption keys against any encrypted credentials or notification channels already stored in the database. Missing encryption keys are warnings only while no saved data needs them; configure each key before creating data that uses it. The API and worker repeat the same validation at startup. The preflight command does not create users, change existing records, or print secret values.
 
 ### Every time you start the app
 
@@ -73,6 +81,56 @@ When Vite says it is ready, open **http://localhost:5173** and sign in with the 
 
 Leave all three terminals running while using the app. To stop it, press `Ctrl+C` in each terminal. Do not start a second API or worker for the same local database.
 
+The worker creates one consistent SQLite backup per UTC day, on its first scheduler tick after startup. It reuses the day's backup after a worker restart. Local backups are written to `apps/api/backups` by default and older backups are removed after seven days. Backup files are named `sentinel-YYYYMMDD.db`. Backups contain the full monitoring database, including encrypted credentials, so protect the folder and keep the matching `ALERT_ENCRYPTION_KEY` and `DEVICE_ENCRYPTION_KEY` available.
+
+You can override the backup location and retention in `apps/api/.env`:
+
+```dotenv
+SQLITE_BACKUP_DIR=backups
+SQLITE_BACKUP_RETENTION_DAYS=7
+```
+
+`SQLITE_BACKUP_DIR` may be absolute or relative to `apps/api`. Retention must be between 1 and 3650 days.
+
+To restore a local backup, stop the API and worker, then copy the latest backup over the database and retain the current file as a precaution:
+
+```powershell
+$backup = Get-ChildItem apps\api\backups\sentinel-*.db | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+Copy-Item apps\api\prisma\dev.db apps\api\prisma\dev.db.before-restore
+Copy-Item $backup.FullName apps\api\prisma\dev.db -Force
+```
+
+Restart the API and worker afterwards. For Docker, stop both services, select a backup filename, and copy it inside a one-off container using the persistent volume:
+
+```powershell
+docker compose stop api worker
+$backup = "sentinel-YYYYMMDD.db"
+docker compose run --rm --no-deps --entrypoint sh api -c "cp /data/sentinel.db /data/sentinel-before-restore.db && cp /data/backups/$backup /data/sentinel.db"
+docker compose up -d api worker
+```
+
+Replace the example filename with a file present in `/data/backups`. Never copy or replace the live SQLite database while the API or worker is running.
+
+### Backup restore verification
+
+Before relying on backups for recovery, verify the full SQLite backup-and-restore path against temporary databases:
+
+```powershell
+npm run verify:backup
+```
+
+This test creates a disposable database, makes a backup through SQLite's online backup operation, restores it to a second disposable database, and checks both its integrity and contents. It does not read or replace the live application database.
+
+### Worker recovery verification
+
+Run the worker job and abandoned-job recovery smoke tests with:
+
+```powershell
+npm run verify:worker
+```
+
+The recovery test marks a job as stale in a disposable SQLite database, runs the same recovery query used by the worker, and verifies that only the stale job is requeued. This checks recovery behavior but is not a substitute for the 24–48 hour lab soak test or validation against real MikroTik traffic.
+
 ### After changing Prisma models
 
 Stop both the API and worker first, then regenerate the client from the repository root:
@@ -92,6 +150,8 @@ Optional API configuration belongs in `apps/api/.env`; use `apps/api/.env.exampl
 | `NODE_ENV` | `development` | Runtime mode. Production requires an explicit `DATABASE_URL`. |
 | `PORT` | `3000` | API listening port. |
 | `DATABASE_URL` | `file:./dev.db` in development | Prisma database connection string. |
+| `SQLITE_BACKUP_DIR` | `apps/api/backups` locally; `/data/backups` in Compose | Destination for daily SQLite backups; relative paths resolve from `apps/api`. |
+| `SQLITE_BACKUP_RETENTION_DAYS` | `7` | Number of days to keep backups (1–3650); configure this in `apps/api/.env` locally or the project-root `.env` for Compose. |
 | `AUTH_INITIAL_ADMIN_EMAIL` | Empty | Email for the first Super Admin; required when the database has no users. |
 | `AUTH_INITIAL_ADMIN_PASSWORD` | Empty | First Super Admin password (12–128 characters); remove after account creation. |
 | `AUTH_COOKIE_SECURE` | `false` | Set to `true` when HTTPS is terminated in front of the app. |

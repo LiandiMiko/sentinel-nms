@@ -35,7 +35,7 @@ export default function Reports() {
         setExporting(true);
         try {
             const params = { from: form.from, to: form.to };
-            if (form.type === "metrics" && form.deviceId) params.deviceId = form.deviceId;
+            if (form.deviceId) params.deviceId = form.deviceId;
             const response = await api.get(`/reports/${form.type}/${form.format}`, { params, responseType: "blob" });
             const contentType = form.format === "xlsx"
                 ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -79,16 +79,16 @@ export default function Reports() {
             <section className="main-panel">
                 <header className="topbar"><div className="breadcrumb"><Link to="/">Workspace</Link><span>/</span><strong>Reports</strong></div><div className="topbar-right"><AccountMenu /></div></header>
                 <div className="page-content">
-                    <div className="page-heading"><div><span className="eyebrow">HISTORICAL DATA</span><h1>Reports</h1><p>Export metric history and alert events as Excel workbooks or PDF.</p></div></div>
+                    <div className="page-heading"><div><span className="eyebrow">HISTORICAL DATA</span><h1>Reports</h1><p>Export metric history, alert events, or outage summaries as Excel workbooks or PDF.</p></div></div>
                     {error && <div className="notice-error" role="alert">{error}</div>}
                     <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">EXPORT</span><h2><FileBarChart size={18} />Build a report</h2></div></div>
                         <form className="settings-form report-form" onSubmit={download}>
-                            <label>Report data<select name="type" value={form.type} onChange={update}><option value="metrics">Metric history</option><option value="alerts">Alert history</option></select></label>
+                            <label>Report data<select name="type" value={form.type} onChange={update}><option value="metrics">Metric history</option><option value="alerts">Alert history</option><option value="outages">Outage summary</option></select></label>
                             <label>File format<select name="format" value={form.format} onChange={update}><option value="xlsx">Excel (.xlsx)</option><option value="pdf">PDF</option></select></label>
                             <div className="form-row"><label>From<input name="from" type="date" value={form.from} onChange={update} required /></label><label>To<input name="to" type="date" value={form.to} onChange={update} required /></label></div>
-                            {form.type === "metrics" && <label>Device <small>{loadingDevices ? "Loading devices..." : "Leave empty to include every device"}</small><select name="deviceId" value={form.deviceId} onChange={update} disabled={loadingDevices}><option value="">All devices</option>{devices.map((device) => <option key={device.id} value={device.id}>{device.name} ({device.ipAddress})</option>)}</select></label>}
-                            <p className="form-help">Date ranges are limited to 31 days. Excel exports include up to 50,000 rows; PDF exports include up to 5,000 rows.</p>
+                            <label>Device <small>{loadingDevices ? "Loading devices..." : "Leave empty to include every device"}</small><select name="deviceId" value={form.deviceId} onChange={update} disabled={loadingDevices}><option value="">All devices</option>{devices.map((device) => <option key={device.id} value={device.id}>{device.name} ({device.ipAddress})</option>)}</select></label>
+                            <p className="form-help">Date ranges are limited to 31 days. Outage reports include open and resolved device/interface events. Excel exports include up to 50,000 rows; PDF exports include up to 5,000 rows.</p>
                             <button className="button button-primary" type="submit" disabled={exporting}><Download size={16} />{exporting ? "Preparing report..." : "Download report"}</button>
                         </form>
                     </section>

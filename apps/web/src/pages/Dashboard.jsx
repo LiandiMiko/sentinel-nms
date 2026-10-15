@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, AlertTriangle, BellRing, CirclePlus, Cpu, FileBarChart, Pencil, RefreshCw, Router, Search, Settings, ShieldAlert, Trash2, Wifi, X } from "lucide-react";
-import { getSummary, getDevices } from "../api/dashboard";
+import { getSummary, getDevices, getOperationsHealth } from "../api/dashboard";
+import { getGroups } from "../api/phase2";
 import api from "../api/client";
 import { formatDate, formatUptime } from "../utils/format";
 import AccountMenu from "../components/AccountMenu";
@@ -159,7 +160,10 @@ function DeviceDialog({ device, onClose, onSaved }) {
 export default function Dashboard() {
     const { user } = useAuth();
     const [summary, setSummary] = useState(null);
+    const [operationsHealth, setOperationsHealth] = useState(null);
     const [devices, setDevices] = useState([]);
+    const [groups, setGroups] = useState([]);
+    const [tags, setTags] = useState([]);
     const [error, setError] = useState("");
     const [dialogDevice, setDialogDevice] = useState(undefined);
     const canManage = user.role !== "VIEWER";
@@ -167,13 +171,42 @@ export default function Dashboard() {
     const [initialLoading, setInitialLoading] = useState(true);
     const [polling, setPolling] = useState(false);
     const [filter, setFilter] = useState("ALL");
+    const [groupFilter, setGroupFilter] = useState("");
+    const [tagFilter, setTagFilter] = useState("");
+    const [searchText, setSearchText] = useState("");
+    const [search, setSearch] = useState("");
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => setSearch(searchText.trim()), 250);
+        return () => window.clearTimeout(timeout);
+    }, [searchText]);
+
+    useEffect(() => {
+        getGroups()
+            .then(({ groups: groupData, tags: tagData }) => {
+                setGroups(groupData);
+                setTags(tagData);
+            })
+            .catch((requestError) => setError(requestError.response?.data?.message ?? "Could not load device groups and tags."));
+    }, []);
 
     const load = useCallback(async () => {
         setRefreshing(true);
         try {
-            const [summaryData, deviceData] = await Promise.all([getSummary(), getDevices()]);
+            const filters = {
+                ...(filter !== "ALL" ? { status: filter } : {}),
+                ...(groupFilter ? { groupId: groupFilter } : {}),
+                ...(tagFilter ? { tagId: tagFilter } : {}),
+                ...(search ? { search } : {})
+            };
+            const [summaryData, deviceData, healthData] = await Promise.all([
+                getSummary(),
+                getDevices(filters),
+                getOperationsHealth()
+            ]);
             setSummary(summaryData);
             setDevices(deviceData);
+            setOperationsHealth(healthData);
             setError("");
         } catch (requestError) {
             setError(requestError.response?.data?.message ?? "Could not connect to the Sentinel API.");
@@ -181,7 +214,7 @@ export default function Dashboard() {
             setRefreshing(false);
             setInitialLoading(false);
         }
-    }, []);
+    }, [filter, groupFilter, tagFilter, search]);
 
     useEffect(() => {
         const initialLoad = setTimeout(load, 0);
@@ -203,10 +236,13 @@ export default function Dashboard() {
                 const { data: response } = await api.get(`/metrics/poll/${queued.data.id}`);
                 job = response.data;
                 if (job.status === "FAILED") throw new Error(job.error || "The polling worker failed.");
-            } while (["PENDING", "PROCESSING"].includes(job.status) && Date.now() < deadline);
+            } while (["PENDING", "PROCESSING", "RETRY_WAIT"].includes(job.status) && Date.now() < deadline);
 
             if (job.status !== "COMPLETED") {
-                throw new Error(`Polling is still running in the worker (job ${job.id}). The dashboard will refresh automatically.`);
+                const retry = job.status === "RETRY_WAIT"
+                    ? ` Retry ${job.attempts}/${job.maxAttempts} scheduled for ${formatDate(job.nextAttemptAt)}.`
+                    : "";
+                throw new Error(`Polling job ${job.id} is ${job.status.toLowerCase()}.${retry}`);
             }
             await load();
         } catch (requestError) {
@@ -226,9 +262,6 @@ export default function Dashboard() {
         }
     }
 
-    const visibleDevices = filter === "ALL"
-        ? devices
-        : devices.filter((device) => device.status === filter);
     const stats = [
         { label: "Total devices", value: summary?.totalDevices ?? 0, icon: Router, color: "blue" },
         { label: "Online", value: summary?.upDevices ?? 0, icon: Wifi, color: "green" },
@@ -275,13 +308,32 @@ export default function Dashboard() {
                                 : <article className="stat-card" key={label}><div className={`stat-icon ${color}`}><Icon size={18} /></div><span className="stat-label">{label}</span><strong className="stat-value">{value.toLocaleString()}</strong><span className="stat-caption">{label === "Metrics collected" ? "historical data points" : label === "Total devices" ? "registered in inventory" : "currently reporting"}</span></article>
                         ))}
                     </div>
+                    <section className="phase2-card operations-health" aria-labelledby="operations-health-title">
+                        <div className="phase2-section-heading">
+                            <div><span className="eyebrow">SYSTEM HEALTH</span><h2 id="operations-health-title">Polling worker</h2></div>
+                            <button className="icon-button" onClick={load} title="Refresh system health" disabled={refreshing}><RefreshCw size={16} className={refreshing ? "spin" : ""} /></button>
+                        </div>
+                        {initialLoading && !operationsHealth ? <p className="loading-inline" role="status">Checking worker and polling queue...</p> : operationsHealth ? <>
+                            <div className="operations-health-grid">
+                                <div><span>Worker</span><strong className={operationsHealth.worker.alive ? "health-up" : "health-down"}>{operationsHealth.worker.alive ? "Running" : "Not responding"}</strong><small>Heartbeat {formatDate(operationsHealth.worker.lastHeartbeatAt)}</small></div>
+                                <div><span>Queue depth</span><strong>{operationsHealth.queue.pending + operationsHealth.queue.processing + operationsHealth.queue.retryWait}</strong><small>{operationsHealth.queue.pending} pending · {operationsHealth.queue.processing} processing · {operationsHealth.queue.retryWait} retry wait</small></div>
+                                <div><span>Last successful poll</span><strong>{operationsHealth.lastSuccessfulPollAt ? formatDate(operationsHealth.lastSuccessfulPollAt) : "Not yet"}</strong><small>{operationsHealth.consecutiveFailedJobs ? `${operationsHealth.consecutiveFailedJobs} consecutive failed job(s)` : "No consecutive job failures"}</small></div>
+                            </div>
+                            {operationsHealth.latestJob && <p className="form-help">Latest job: {operationsHealth.latestJob.status} · attempt {operationsHealth.latestJob.attempts}/{operationsHealth.latestJob.maxAttempts}{operationsHealth.latestJob.nextAttemptAt ? ` · retry at ${formatDate(operationsHealth.latestJob.nextAttemptAt)}` : ""}</p>}
+                        </> : <p className="notice-error" role="alert">System health information is unavailable. Check the API connection and refresh.</p>}
+                    </section>
                     <section className="device-section" id="devices">
-                        <div className="section-heading"><div><span className="eyebrow">YOUR NETWORK</span><h2>Devices <span className="count-pill">{devices.length}</span></h2></div><div className="section-controls"><label className="filter-label" htmlFor="status-filter">Status</label><select id="status-filter" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="ALL">All devices</option><option value="UP">Online</option><option value="DOWN">Offline</option><option value="DISABLED">Disabled</option></select><button className="icon-button" onClick={load} title="Refresh list" disabled={refreshing}><RefreshCw size={16} className={refreshing ? "spin" : ""} /></button></div></div>
+                        <div className="section-heading"><div><span className="eyebrow">YOUR NETWORK</span><h2>Devices <span className="count-pill">{devices.length}</span></h2></div><div className="section-controls device-filters">
+                            <label className="search-control"><Search size={16} /><input type="search" value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search name or IP" aria-label="Search devices by name or IP address" /></label>
+                            <label className="sr-only" htmlFor="status-filter">Filter by status</label><select id="status-filter" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="ALL">All statuses</option><option value="UP">Online</option><option value="DOWN">Offline</option><option value="DISABLED">Disabled</option></select>
+                            <label className="sr-only" htmlFor="group-filter">Filter by group</label><select id="group-filter" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="">All groups</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select>
+                            <label className="sr-only" htmlFor="tag-filter">Filter by tag</label><select id="tag-filter" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}><option value="">All tags</option>{tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}</select>
+                            <button className="icon-button" onClick={load} title="Refresh list" disabled={refreshing}><RefreshCw size={16} className={refreshing ? "spin" : ""} /></button></div></div>
                         <div className="table-wrap">
                             <table className="device-table">
                                 <thead><tr><th>DEVICE</th><th>STATUS</th><th>CPU LOAD</th><th>UPTIME</th><th>LAST SEEN</th><th><span className="sr-only">Actions</span></th></tr></thead>
                                 <tbody>
-                                    {visibleDevices.map((device) => (
+                                    {devices.map((device) => (
                                         <tr key={device.id}>
                                             <td><div className="device-cell"><span className="device-symbol"><Router size={18} /></span><span><Link to={`/device/${device.id}`} className="device-name">{device.name}</Link><small>{device.ipAddress}</small><span className="device-labels">{[...(device.groups ?? []).map((group) => group.name), ...(device.tags ?? []).map((tag) => `#${tag.name}`)].slice(0, 4).join(" · ")}</span></span></div></td>
                                             <td><span className={`status-badge ${device.status.toLowerCase()}`}><i />{device.status === "UP" ? "Online" : device.status === "DISABLED" ? "Disabled" : "Offline"}</span></td>
@@ -291,6 +343,7 @@ export default function Dashboard() {
                                             <td><div className="row-actions"><Link to={`/device/${device.id}`} className="icon-button" title="View device"><Cpu size={16} /></Link>{canManage && <><button className="icon-button" title="Edit device" onClick={() => setDialogDevice(device)}><Pencil size={15} /></button><button className="icon-button danger-hover" title="Delete device" onClick={() => removeDevice(device)}><Trash2 size={15} /></button></>}</div></td>
                                         </tr>
                                     ))}
+                                    {!initialLoading && devices.length === 0 && <tr><td colSpan="6" className="table-empty">{search || filter !== "ALL" || groupFilter || tagFilter ? "No devices match these filters. Clear a filter or search for another device." : "No devices have been added yet. Add a device to begin monitoring."}</td></tr>}
                                     {visibleDevices.length === 0 && <tr><td colSpan="6"><div className="empty-state" aria-live="polite"><span className="empty-icon"><Router size={23} /></span><strong>{initialLoading ? "Loading devices..." : error && devices.length === 0 ? "Devices could not be loaded" : devices.length === 0 ? "Your network is ready" : "No matching devices"}</strong><p>{initialLoading ? "Fetching the latest monitoring data." : error && devices.length === 0 ? "Check the API connection, then refresh." : devices.length === 0 ? "Add your first SNMP device to start monitoring." : "Try selecting a different status filter."}</p>{!initialLoading && !error && devices.length === 0 && canManage && <button className="button button-primary" onClick={() => setDialogDevice(null)}><CirclePlus size={16} />Add your first device</button>}</div></td></tr>}
                                 </tbody>
                             </table>

@@ -20,6 +20,18 @@ const emptyChannel = {
     to: ""
 };
 
+function formatBytes(value) {
+    if (!Number.isFinite(value) || value < 0) return "—";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let scaled = value;
+    let unit = 0;
+    while (scaled >= 1024 && unit < units.length - 1) {
+        scaled /= 1024;
+        unit += 1;
+    }
+    return `${scaled.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
 export default function Settings() {
     const { user } = useAuth();
     const canManage = user.role !== "VIEWER";
@@ -66,7 +78,12 @@ export default function Settings() {
         setError("");
         setMessage("");
         try {
-            await updateSettings(settings);
+            await updateSettings({
+                pollingIntervalSeconds: settings.pollingIntervalSeconds,
+                retentionDays: settings.retentionDays,
+                retentionEnabled: settings.retentionEnabled
+            });
+            await load();
             setMessage("Settings saved.");
         } catch (requestError) {
             setError(requestError.response?.data?.message ?? "Could not save settings.");
@@ -177,10 +194,17 @@ export default function Settings() {
                         <div className="phase2-section-heading"><div><span className="eyebrow">MONITORING</span><h2>Polling & data retention</h2></div></div>
                         {canChangeSystemSettings ? <form className="settings-form" onSubmit={saveSettings}>
                             <label>Polling interval (seconds)<input type="number" min="15" max="3600" value={settings.pollingIntervalSeconds} onChange={(event) => setSettings({ ...settings, pollingIntervalSeconds: Number(event.target.value) })} /><small>Devices are polled at this interval (15–3600 seconds).</small></label>
-                            <label>Metric retention (days)<input type="number" min="1" max="3650" value={settings.retentionDays} onChange={(event) => setSettings({ ...settings, retentionDays: Number(event.target.value) })} /><small>Older metric samples will be automatically removed (1–3650 days).</small></label>
+                            <label>Metric retention (days)<input type="number" min="1" max="3650" value={settings.retentionDays} onChange={(event) => setSettings({ ...settings, retentionDays: Number(event.target.value) })} /><small>When enabled, metric samples older than this period are deleted daily. Device and interface outage events are not removed by metric retention.</small></label>
                             <label className="checkbox-label"><input type="checkbox" checked={settings.retentionEnabled} onChange={(event) => setSettings({ ...settings, retentionEnabled: event.target.checked })} /> Enable automatic metric retention cleanup</label>
+                            <div className="storage-estimate" role="status">
+                                <strong>SQLite storage</strong>
+                                <span>Current database file: {formatBytes(settings.storage.databaseBytes)}</span>
+                                <span>{settings.storage.metricSamplesLast7Days.toLocaleString()} metric samples · approx. {formatBytes(settings.storage.metricBytesLast7Days)} in the last 7 days</span>
+                                <span>Estimated metric data at {settings.retentionDays}-day retention: approx. {formatBytes(settings.storage.estimatedDailyMetricBytes * settings.retentionDays)}</span>
+                                <small>Estimate assumes recent write volume continues; deleted rows may not reduce the SQLite file until it is compacted.</small>
+                            </div>
                             <button className="button button-primary" type="submit" disabled={saving}>{saving ? "Saving..." : "Save settings"}</button>
-                        </form> : <p className="form-help settings-form">Only Super Admin can change global polling and retention settings.</p>}
+                        </form> : <div className="settings-form"><p className="form-help">Only Super Admin can change global polling and retention settings.</p><div className="storage-estimate" role="status"><strong>SQLite storage</strong><span>Current database file: {formatBytes(settings.storage.databaseBytes)}</span><span>Estimated metric data at {settings.retentionDays}-day retention: approx. {formatBytes(settings.storage.estimatedRetainedMetricBytes)}</span></div></div>}
                     </section>}
                     <section className="phase2-card">
                         <div className="phase2-section-heading"><div><span className="eyebrow">ORGANIZATION</span><h2>Device groups</h2></div></div>

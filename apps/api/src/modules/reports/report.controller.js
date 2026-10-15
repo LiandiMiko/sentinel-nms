@@ -11,7 +11,7 @@ const querySchema = z.object({
 class ReportController {
     async export(req, res) {
         const { type, format } = req.params;
-        if (!["metrics", "alerts"].includes(type) || !["pdf", "xlsx"].includes(format)) {
+        if (!["metrics", "alerts", "outages"].includes(type) || !["pdf", "xlsx"].includes(format)) {
             const error = new Error("Unsupported report type or format.");
             error.status = 404;
             throw error;

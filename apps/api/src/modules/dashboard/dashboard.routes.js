@@ -15,6 +15,11 @@ router.get(
 );
 
 router.get(
+    "/health",
+    asyncHandler(controller.operationsHealth.bind(controller))
+);
+
+router.get(
     "/devices/:id",
     asyncHandler(controller.getDevice.bind(controller))
 );

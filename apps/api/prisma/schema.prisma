@@ -213,10 +213,14 @@ model PollJob {
   requestedAt DateTime @default(now())
   startedAt   DateTime?
   completedAt DateTime?
+  nextAttemptAt DateTime?
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(3)
   result      String?
   error       String?
 
   @@index([status, requestedAt])
+  @@index([status, nextAttemptAt])
   @@index([completedAt])
 }
 

@@ -8,10 +8,18 @@ export async function getSummary() {
     return res.data.data;
 }
 
-export async function getDevices() {
-    const res = await api.get("/dashboard/devices");
+export async function getDevices(filters = {}) {
+    const res = await api.get("/dashboard/devices", { params: filters });
     if (!Array.isArray(res.data?.data)) {
         throw new Error("The device list response was invalid.");
+    }
+    return res.data.data;
+}
+
+export async function getOperationsHealth() {
+    const res = await api.get("/dashboard/health");
+    if (!res.data?.data || typeof res.data.data !== "object") {
+        throw new Error("The system health response was invalid.");
     }
     return res.data.data;
 }

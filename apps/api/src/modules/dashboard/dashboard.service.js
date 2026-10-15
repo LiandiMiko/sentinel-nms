@@ -1,10 +1,11 @@
 import deviceRepository from "../devices/device.repository.js";
 import metricRepository from "../metrics/metric.repository.js";
 import prisma from "../../core/database/prisma.js";
+import operationsHealthService from "./operations-health.service.js";
 
 class DashboardService {
-    async devices() {
-        const devices = await deviceRepository.findAllWithMetrics();
+    async devices(filters) {
+        const devices = await deviceRepository.findAllWithMetrics(filters);
 
         return devices.map((device) => {
             const now = Date.now();
@@ -68,6 +69,10 @@ class DashboardService {
                     : latest;
             }, null)
         };
+    }
+
+    async operationsHealth() {
+        return operationsHealthService.get();
     }
 
     async getDevice(id) {

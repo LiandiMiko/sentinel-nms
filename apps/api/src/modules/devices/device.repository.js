@@ -85,8 +85,38 @@ class DeviceRepository {
             }
         });
     }
-    async findAllWithMetrics() {
+    async findAllWithMetrics(filters = {}) {
+        const conditions = [];
+        if (filters.search) {
+            conditions.push({
+                OR: [
+                    { name: { contains: filters.search } },
+                    { ipAddress: { contains: filters.search } }
+                ]
+            });
+        }
+        if (filters.groupId) conditions.push({ groups: { some: { groupId: filters.groupId } } });
+        if (filters.tagId) conditions.push({ tags: { some: { tagId: filters.tagId } } });
+        if (filters.status === "DISABLED") conditions.push({ enabled: false });
+        if (filters.status === "UP") {
+            conditions.push({
+                enabled: true,
+                status: "up",
+                lastSeen: { gte: new Date(Date.now() - 90_000) }
+            });
+        }
+        if (filters.status === "DOWN") {
+            conditions.push({
+                enabled: true,
+                OR: [
+                    { status: { not: "up" } },
+                    { lastSeen: null },
+                    { lastSeen: { lt: new Date(Date.now() - 90_000) } }
+                ]
+            });
+        }
         return prisma.device.findMany({
+            where: conditions.length ? { AND: conditions } : undefined,
             include: {
                 snapshot: true,
                 groups: { include: { group: { select: { id: true, name: true } } } },

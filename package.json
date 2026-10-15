@@ -10,6 +10,9 @@
     "web": "npm run dev --workspace=web --",
     "collector": "npm run dev --workspace=collector",
     "scheduler": "npm run dev --workspace=scheduler",
-    "worker": "npm run start --workspace=scheduler"
+    "worker": "npm run start --workspace=scheduler",
+    "preflight": "npm run preflight --workspace=api",
+    "verify:backup": "npm run test:backup --workspace=api",
+    "verify:worker": "npm run test:worker --workspace=api"
   }
 }

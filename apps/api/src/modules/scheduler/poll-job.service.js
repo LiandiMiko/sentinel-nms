@@ -7,23 +7,41 @@ const toJob = (row) => row ? ({
     requestedAt: row.requestedAt,
     startedAt: row.startedAt,
     completedAt: row.completedAt,
+    attempts: row.attempts,
+    maxAttempts: row.maxAttempts,
+    nextAttemptAt: row.nextAttemptAt,
     result: row.result ? JSON.parse(row.result) : null,
     error: row.error
 }) : null;
+
+export async function requeueAbandonedPollJobs(database, maxAgeMs = 15 * 60 * 1000) {
+    const maxAgeSeconds = Math.max(1, Math.floor(maxAgeMs / 1000));
+    return database.$executeRaw`
+        UPDATE "PollJob"
+        SET "status" = CASE WHEN "attempts" < "maxAttempts" THEN 'PENDING' ELSE 'FAILED' END,
+            "startedAt" = NULL,
+            "completedAt" = CASE WHEN "attempts" < "maxAttempts" THEN NULL ELSE CURRENT_TIMESTAMP END,
+            "nextAttemptAt" = NULL,
+            "error" = CASE WHEN "attempts" < "maxAttempts" THEN NULL ELSE 'Maximum poll attempts reached after worker interruption.' END
+        WHERE "status" = 'PROCESSING'
+            AND datetime("startedAt") < datetime('now', '-' || ${maxAgeSeconds} || ' seconds')
+    `;
+}
 
 class PollJobService {
     async enqueue() {
         const id = randomUUID();
         await prisma.$executeRaw`
-            INSERT INTO "PollJob" ("id", "status", "requestedAt")
-            VALUES (${id}, 'PENDING', CURRENT_TIMESTAMP)
+            INSERT INTO "PollJob" ("id", "status", "requestedAt", "attempts", "maxAttempts")
+            VALUES (${id}, 'PENDING', CURRENT_TIMESTAMP, 0, 3)
         `;
         return this.get(id);
     }
 
     async get(id) {
         const rows = await prisma.$queryRaw`
-            SELECT "id", "status", "requestedAt", "startedAt", "completedAt", "result", "error"
+            SELECT "id", "status", "requestedAt", "startedAt", "completedAt",
+                "attempts", "maxAttempts", "nextAttemptAt", "result", "error"
             FROM "PollJob"
             WHERE "id" = ${id}
             LIMIT 1
@@ -35,7 +53,8 @@ class PollJobService {
         const rows = await prisma.$queryRaw`
             SELECT "id"
             FROM "PollJob"
-            WHERE "status" = 'PENDING'
+            WHERE "status" IN ('PENDING', 'RETRY_WAIT')
+                AND ("nextAttemptAt" IS NULL OR datetime("nextAttemptAt") <= datetime('now'))
             ORDER BY "requestedAt" ASC
             LIMIT 1
         `;
@@ -44,8 +63,14 @@ class PollJobService {
 
         const claimed = await prisma.$executeRaw`
             UPDATE "PollJob"
-            SET "status" = 'PROCESSING', "startedAt" = CURRENT_TIMESTAMP, "error" = NULL
-            WHERE "id" = ${jobId} AND "status" = 'PENDING'
+            SET "status" = 'PROCESSING',
+                "startedAt" = CURRENT_TIMESTAMP,
+                "attempts" = "attempts" + 1,
+                "nextAttemptAt" = NULL,
+                "error" = NULL
+            WHERE "id" = ${jobId}
+                AND "status" IN ('PENDING', 'RETRY_WAIT')
+                AND ("nextAttemptAt" IS NULL OR datetime("nextAttemptAt") <= datetime('now'))
         `;
         if (claimed !== 1) return null;
         return this.get(jobId);
@@ -55,7 +80,7 @@ class PollJobService {
         const rows = await prisma.$queryRaw`
             SELECT 1 AS "active"
             FROM "PollJob"
-            WHERE "status" IN ('PENDING', 'PROCESSING')
+            WHERE "status" IN ('PENDING', 'PROCESSING', 'RETRY_WAIT')
             LIMIT 1
         `;
         return rows.length > 0;
@@ -73,24 +98,34 @@ class PollJobService {
     }
 
     async fail(id, error) {
+        const job = await this.get(id);
+        if (!job || job.status !== "PROCESSING") return;
+        const message = String(error?.message ?? error).slice(0, 2000);
+        if (job.attempts < job.maxAttempts) {
+            const delaySeconds = Math.min(300, 15 * (2 ** Math.max(0, job.attempts - 1)));
+            await prisma.$executeRaw`
+                UPDATE "PollJob"
+                SET "status" = 'RETRY_WAIT',
+                    "startedAt" = NULL,
+                    "nextAttemptAt" = datetime('now', '+' || ${delaySeconds} || ' seconds'),
+                    "error" = ${message}
+                WHERE "id" = ${id} AND "status" = 'PROCESSING'
+            `;
+            return this.get(id);
+        }
         await prisma.$executeRaw`
             UPDATE "PollJob"
             SET "status" = 'FAILED',
                 "completedAt" = CURRENT_TIMESTAMP,
-                "error" = ${String(error?.message ?? error).slice(0, 2000)}
+                "nextAttemptAt" = NULL,
+                "error" = ${message}
             WHERE "id" = ${id} AND "status" = 'PROCESSING'
         `;
+        return this.get(id);
     }
 
     async requeueAbandoned(maxAgeMs = 15 * 60 * 1000) {
-        const maxAgeSeconds = Math.max(1, Math.floor(maxAgeMs / 1000));
-        const count = await prisma.$executeRaw`
-            UPDATE "PollJob"
-            SET "status" = 'PENDING', "startedAt" = NULL, "error" = NULL
-            WHERE "status" = 'PROCESSING'
-                AND datetime("startedAt") < datetime('now', '-' || ${maxAgeSeconds} || ' seconds')
-        `;
-        return count;
+        return requeueAbandonedPollJobs(prisma, maxAgeMs);
     }
 
     async removeOldJobs(retentionDays = 7) {
@@ -115,8 +150,12 @@ export async function processNextPollJob(jobs, metricService, logger = console) 
         });
         logger.info(`[Worker] Poll job ${job.id} completed. UP=${result.up} DOWN=${result.down}`);
     } catch (error) {
-        await jobs.fail(job.id, error);
-        logger.error(`[Worker] Poll job ${job.id} failed:`, error);
+        const failedJob = await jobs.fail(job.id, error);
+        if (failedJob?.status === "RETRY_WAIT") {
+            logger.error(`[Worker] Poll job ${job.id} failed on attempt ${failedJob.attempts}/${failedJob.maxAttempts}; retry scheduled for ${failedJob.nextAttemptAt}:`, error);
+        } else {
+            logger.error(`[Worker] Poll job ${job.id} exhausted its retry attempts:`, error);
+        }
     }
     return true;
 }

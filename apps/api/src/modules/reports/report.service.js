@@ -19,7 +19,8 @@ class ReportService {
                 orderBy: { createdAt: "desc" },
                 take: take + 1
             })
-            : await prisma.alert.findMany({
+            : type === "alerts"
+                ? await prisma.alert.findMany({
                 where: {
                     triggeredAt: { gte: from, lte: to },
                     ...(deviceId ? { deviceId } : {})
@@ -27,7 +28,16 @@ class ReportService {
                 include: { rule: { select: { name: true, severity: true } } },
                 orderBy: { triggeredAt: "desc" },
                 take: take + 1
-            });
+                })
+                : await prisma.deviceEvent.findMany({
+                    where: {
+                        startedAt: { gte: from, lte: to },
+                        ...(deviceId ? { deviceId } : {})
+                    },
+                    include: { device: { select: { name: true, ipAddress: true } } },
+                    orderBy: { startedAt: "desc" },
+                    take: take + 1
+                });
         if (rows.length > take) {
             const error = new Error(`This ${format.toUpperCase()} report exceeds its ${take.toLocaleString()}-row limit. Narrow the date range or filter the selected device.`);
             error.status = 413;
@@ -46,7 +56,8 @@ class ReportService {
                 { header: "Value", key: "value", width: 24 },
                 { header: "Unit", key: "unit", width: 14 }
             ]
-            : [
+            : type === "alerts"
+                ? [
                 { header: "Triggered (UTC)", key: "timestamp", width: 24 },
                 { header: "Severity", key: "severity", width: 14 },
                 { header: "Rule", key: "rule", width: 28 },
@@ -54,7 +65,17 @@ class ReportService {
                 { header: "IP address", key: "ipAddress", width: 18 },
                 { header: "State", key: "state", width: 16 },
                 { header: "Message", key: "message", width: 60 }
-            ];
+                ]
+                : [
+                    { header: "Started (UTC)", key: "timestamp", width: 24 },
+                    { header: "Resolved (UTC)", key: "resolvedAt", width: 24 },
+                    { header: "Duration", key: "duration", width: 18 },
+                    { header: "Type", key: "type", width: 22 },
+                    { header: "Device", key: "device", width: 26 },
+                    { header: "IP address", key: "ipAddress", width: 18 },
+                    { header: "Interface / subject", key: "subject", width: 30 },
+                    { header: "Details", key: "message", width: 60 }
+                ];
     }
 
     values(type, row) {
@@ -68,13 +89,26 @@ class ReportService {
                 unit: row.unit ?? ""
             };
         }
-        return {
+        if (type === "alerts") return {
             timestamp: row.triggeredAt.toISOString(),
             severity: row.rule.severity,
             rule: row.rule.name,
             device: row.deviceName,
             ipAddress: row.deviceIpAddress,
             state: row.state,
+            message: row.message
+        };
+        const durationSeconds = Math.max(0, Math.floor(
+            ((row.resolvedAt ?? new Date()).getTime() - row.startedAt.getTime()) / 1000
+        ));
+        return {
+            timestamp: row.startedAt.toISOString(),
+            resolvedAt: row.resolvedAt?.toISOString() ?? "Ongoing",
+            duration: `${durationSeconds}s`,
+            type: row.type,
+            device: row.device.name,
+            ipAddress: row.device.ipAddress,
+            subject: row.subject,
             message: row.message
         };
     }
@@ -117,7 +151,9 @@ class ReportService {
 
         const widths = type === "metrics"
             ? [90, 110, 72, 140, 110, 70]
-            : [90, 58, 105, 90, 70, 65, 250];
+            : type === "alerts"
+                ? [90, 58, 105, 90, 70, 65, 250]
+                : [90, 90, 55, 95, 90, 70, 110, 218];
         const headers = columns.map(({ header }) => header);
         const rowHeight = 22;
         const drawRow = (cells, header = false) => {

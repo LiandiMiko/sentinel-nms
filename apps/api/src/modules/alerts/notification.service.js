@@ -84,6 +84,32 @@ class NotificationService {
         }));
     }
 
+    async sendOperationalNotification({ title, message }) {
+        const channels = await prisma.notificationChannel.findMany({
+            where: { enabled: true },
+            orderBy: { createdAt: "asc" }
+        });
+        if (channels.length === 0) return { attempted: 0, delivered: 0 };
+        const results = await Promise.all(channels.map(async (channel) => {
+            try {
+                await this.send(channel, { title, message });
+                await prisma.notificationChannel.update({
+                    where: { id: channel.id },
+                    data: { lastSentAt: new Date(), lastError: null }
+                });
+                return true;
+            } catch (error) {
+                console.error(`[Operations] Notification channel ${channel.id} failed:`, error.message);
+                await prisma.notificationChannel.update({
+                    where: { id: channel.id },
+                    data: { lastError: error.message.slice(0, 500) }
+                });
+                return false;
+            }
+        }));
+        return { attempted: channels.length, delivered: results.filter(Boolean).length };
+    }
+
     async send(channel, notification) {
         const config = decryptSecret(channel.config);
         if (channel.type === "WEBHOOK") {

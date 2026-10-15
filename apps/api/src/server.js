@@ -20,6 +20,8 @@ import authService from "./modules/auth/auth.service.js";
 import { authenticate, csrfProtection, enforceRolePermissions } from "./modules/auth/auth.middleware.js";
 import { auditRequest } from "./modules/auth/audit.middleware.js";
 import prisma from "./core/database/prisma.js";
+import { validateRuntimeConfiguration } from "./core/config/runtime-validation.js";
+import operationalMonitor from "./modules/dashboard/operational-monitor.service.js";
 
 const app = express();
 const allowedOrigins = new Set(env.webOrigins);
@@ -79,7 +81,9 @@ process.on("unhandledRejection", (err) => {
 });
 
 async function start() {
+    await validateRuntimeConfiguration(prisma);
     await authService.initialize();
+    operationalMonitor.start();
     app.listen(PORT, () => {
         console.log("\n======================================");
         console.log("Sentinel NMS API");
