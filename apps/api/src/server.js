@@ -13,7 +13,6 @@ import groupRoutes from "./modules/devices/group.routes.js";
 import settingsRoutes from "./modules/settings/settings.routes.js";
 import discoveryRoutes from "./modules/discovery/discovery.routes.js";
 import reportRoutes from "./modules/reports/report.routes.js";
-import schedulerService from "./modules/scheduler/scheduler.service.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import userRoutes from "./modules/auth/user.routes.js";
 import auditRoutes from "./modules/auth/audit.routes.js";
@@ -81,7 +80,6 @@ process.on("unhandledRejection", (err) => {
 
 async function start() {
     await authService.initialize();
-    schedulerService.start();
     app.listen(PORT, () => {
         console.log("\n======================================");
         console.log("Sentinel NMS API");

@@ -19,31 +19,71 @@ Then run:
 docker compose up --build
 ```
 
+Compose starts the API, a separate polling worker, and the web app. The worker starts after the API has applied database migrations and passed its health check.
+
 Open `http://localhost:8080` and sign in with that account. The initial account is created as Super Admin only when the database has no users; the password is never reset from environment variables on later restarts. Remove `AUTH_INITIAL_ADMIN_PASSWORD` from the environment after the first successful startup. Set `AUTH_COOKIE_SECURE=true` when serving the site over HTTPS, and set `WEB_ORIGINS` to the exact public web origin(s), comma-separated. Set `WEB_PORT` to change the published port. SQLite data is stored in the `sentinel_data` volume and database migrations are applied when the API starts.
 
 ## Run locally
 
-Requirements: Node.js 22 or newer and npm.
+Requirements: Node.js 22 or newer and npm. Run all commands below from the repository root (`sentinel-nms`), not from `apps/api` or `apps/web`.
 
-```sh
+### One-time setup
+
+Open one terminal at the repository root and install dependencies:
+
+```powershell
 npm ci
 ```
 
-Start the API. On first run, the development command generates the Prisma client and applies migrations automatically. It uses `apps/api/prisma/dev.db` by default:
+Create the local API environment file from the example:
 
-```sh
+```powershell
+Copy-Item apps/api/.env.example apps/api/.env
+```
+
+Edit `apps/api/.env` and set `AUTH_INITIAL_ADMIN_EMAIL` and a unique `AUTH_INITIAL_ADMIN_PASSWORD` of at least 12 characters. This account is created only if the database has no users. Keep the database URL from the example to use the local SQLite database at `apps/api/prisma/dev.db`.
+
+### Every time you start the app
+
+You need **three terminals** open at the repository root. Start them in this order:
+
+**Terminal 1 — API and database migrations**
+
+```powershell
 npm run api
 ```
 
-In a second terminal, start the web app:
+Wait until the terminal says `Sentinel NMS API` and `Status : Running`. The API prepares the Prisma client if it is missing and applies pending database migrations on startup.
 
-```sh
+**Terminal 2 — polling worker**
+
+```powershell
+npm run worker
+```
+
+Wait until you see `[Worker] Starting polling and retention scheduler.` Leave this terminal running; it processes scheduled and manually requested device polls.
+
+**Terminal 3 — web app**
+
+```powershell
 npm run web
 ```
 
-Open `http://localhost:5173`. The Vite development server proxies `/api/v1` to `http://localhost:3000`. To use a different API host, set `API_PROXY_TARGET` before starting the web workspace.
+When Vite says it is ready, open **http://localhost:5173** and sign in with the initial admin account you configured. The web app proxies API requests to `http://localhost:3000`.
 
-Optional API configuration can be provided in `apps/api/.env`; start from `apps/api/.env.example`. `DATABASE_URL` is required in production and defaults to a local SQLite database only in development. The local API also requires `AUTH_INITIAL_ADMIN_EMAIL` and `AUTH_INITIAL_ADMIN_PASSWORD` on first startup; use a unique password of at least 12 characters.
+Leave all three terminals running while using the app. To stop it, press `Ctrl+C` in each terminal. Do not start a second API or worker for the same local database.
+
+### After changing Prisma models
+
+Stop both the API and worker first, then regenerate the client from the repository root:
+
+```powershell
+npm run db:generate --workspace=api
+```
+
+Start the API, worker, and web app again using the three-terminal steps above.
+
+Optional API configuration belongs in `apps/api/.env`; use `apps/api/.env.example` as the template. `DATABASE_URL` is required in production and defaults to a local SQLite database only in development.
 
 ### Environment variables
 
@@ -69,6 +109,7 @@ Docker Compose reads its variables from the project-root `.env`; local API setti
 - Device inventory CRUD, enable/disable, SNMP v1/v2c configuration, device groups, and tags.
 - SNMPv3 polling with noAuthNoPriv, authNoPriv, and authPriv security levels.
 - Configurable scheduled SNMP polling, a manual `POST /api/v1/metrics/poll` endpoint, and bounded concurrent polling.
+- Scheduled and manually requested polling run in a separate worker process; manual polling is queued durably in the shared database.
 - System inventory: SNMP hostname, system description, contact/location (when configured), uptime, MikroTik CPU load or generic HOST-RESOURCES CPU, memory totals/use, and storage volumes (when exposed by the device).
 - Per-core CPU utilization when the device exposes HOST-RESOURCES-MIB processor entries.
 - Interface inventory: name/alias, type, admin/operational state, MTU, speed, MAC, IPv4 addresses, packet counts, inbound/outbound bytes, errors, and discards where available.
@@ -112,7 +153,8 @@ All endpoints use the `/api/v1` prefix and JSON request/response bodies unless t
 | `GET` | `/metrics/device/:id/interfaces` | Interface inventory and current counters | Authenticated |
 | `GET` | `/metrics/device/:id/events` | Device and interface outage history | Authenticated |
 | `GET` | `/metrics/device/:id/summary` | Device metric summary | Authenticated |
-| `POST` | `/metrics/poll` | Trigger a polling cycle | Admin/Super Admin |
+| `POST` | `/metrics/poll` | Queue a polling cycle; returns a job ID | Admin/Super Admin |
+| `GET` | `/metrics/poll/:id` | Read queued/running/completed/failed polling job status | Authenticated |
 | `GET`, `POST` | `/groups` | List or create device groups | Authenticated read; Admin/Super Admin write |
 | `PATCH`, `DELETE` | `/groups/:id` | Update or delete a group | Admin/Super Admin |
 | `PUT` | `/groups/devices/:id` | Assign device group membership | Admin/Super Admin |
@@ -129,4 +171,4 @@ For request validation rules and response shapes, see the module validators/cont
 
 ## Current limitations / next phases
 
-RouterOS integration currently supports read-only REST endpoints on RouterOS v7 over HTTPS with a valid TLS certificate; it does not change device configuration. RouterOS live inspection includes interfaces, simple queues, and active firewall connection metadata, capped at 500 queue and 500 connection entries per request. Queue targets and firewall connections are not guaranteed to map one-to-one to individual users. Per-core CPU readings depend on the device exposing HOST-RESOURCES-MIB processor entries. History chart queries return at most 1,000 points per series. The available history depends on the configured metric retention period; selecting a longer window does not restore metrics already deleted by retention. Outage history starts collecting after the outage-event migration is installed and is not backfilled from older metric samples. Outage timing is based on polling observations, so actual failure/recovery times may differ by up to one polling interval. Discovery supports SNMP v1/v2c only and is restricted to RFC1918 private subnets of at most 256 addresses. Reports are limited to 31 days, 50,000 rows for Excel, and 5,000 rows for PDF. CSV import, SNMPv3 discovery, multi-tenancy, PostgreSQL, and worker separation remain future work. Docker Compose currently uses SQLite and a single API process.
+RouterOS integration currently supports read-only REST endpoints on RouterOS v7 over HTTPS with a valid TLS certificate; it does not change device configuration. RouterOS live inspection includes interfaces, simple queues, and active firewall connection metadata, capped at 500 queue and 500 connection entries per request. Queue targets and firewall connections are not guaranteed to map one-to-one to individual users. Per-core CPU readings depend on the device exposing HOST-RESOURCES-MIB processor entries. History chart queries return at most 1,000 points per series. The available history depends on the configured metric retention period; selecting a longer window does not restore metrics already deleted by retention. Outage history starts collecting after the outage-event migration is installed and is not backfilled from older metric samples. Outage timing is based on polling observations, so actual failure/recovery times may differ by up to one polling interval. Discovery supports SNMP v1/v2c only and is restricted to RFC1918 private subnets of at most 256 addresses. Reports are limited to 31 days, 50,000 rows for Excel, and 5,000 rows for PDF. Poll jobs are stored in the shared SQLite database and old completed jobs are pruned after seven days; run one worker instance with the current SQLite deployment. CSV import, SNMPv3 discovery, multi-tenancy, and PostgreSQL remain future work.

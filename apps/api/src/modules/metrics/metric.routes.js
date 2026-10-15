@@ -10,6 +10,7 @@ router.get(
 );
 
 router.post("/poll", asyncHandler(metricController.poll.bind(metricController)));
+router.get("/poll/:id", asyncHandler(metricController.pollStatus.bind(metricController)));
 router.get(
     "/device/:id/interfaces",
     asyncHandler(metricController.interfaces.bind(metricController))

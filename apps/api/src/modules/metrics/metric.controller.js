@@ -1,16 +1,26 @@
 import metricService from "./metric.service.js";
+import pollJobService from "../scheduler/poll-job.service.js";
 
 
 class MetricController {
 
     async poll(req, res) {
-        const result = await metricService.pollAll();
-
-        res.json({
+        const job = await pollJobService.enqueue();
+        res.status(202).json({
             success: true,
-            message: "Metrics polled successfully",
-            data: result
+            message: "Polling job queued.",
+            data: job
         });
+    }
+
+    async pollStatus(req, res) {
+        const job = await pollJobService.get(req.params.id);
+        if (!job) {
+            const error = new Error("Polling job not found.");
+            error.status = 404;
+            throw error;
+        }
+        res.json({ success: true, data: job });
     }
 
     async history(req, res) {

@@ -11,7 +11,7 @@ const LEGACY_INTERFACE_COUNTERS = {
     out: "1.3.6.1.2.1.2.2.1.16"
 };
 
-const normalizeValue = (value, oid) => {
+export const normalizeValue = (value, oid) => {
     if (!Buffer.isBuffer(value)) return String(value);
     if ((oid === OID.ifPhysAddress || oid?.startsWith(`${OID.ifPhysAddress}.`)) && value.length === 6) {
         return [...value].map((byte) => byte.toString(16).padStart(2, "0")).join(":");
@@ -19,8 +19,9 @@ const normalizeValue = (value, oid) => {
     if ((oid === OID.ipAdEntAddr || oid?.startsWith(`${OID.ipAdEntAddr}.`)) && value.length === 4) {
         return [...value].join(".");
     }
-    if ([OID.ifInOctets, OID.ifOutOctets].some((base) => oid === base || oid?.startsWith(`${base}.`)) && value.length === 8) {
-        return value.readBigUInt64BE().toString();
+    if ([OID.ifInOctets, OID.ifOutOctets].some((base) => oid === base || oid?.startsWith(`${base}.`))) {
+        if (value.length > 8) throw new Error(`Invalid 64-bit SNMP traffic counter length for OID ${oid}.`);
+        return [...value].reduce((counter, byte) => (counter << 8n) | BigInt(byte), 0n).toString();
     }
     return value.toString();
 };

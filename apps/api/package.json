@@ -6,6 +6,7 @@
     "predev": "node scripts/prepare-db.js",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "db:generate": "prisma generate --schema=prisma/schema.prisma",
     "test": "node --test"
   },
   "dependencies": {

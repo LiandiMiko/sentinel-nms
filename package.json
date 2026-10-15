@@ -9,6 +9,7 @@
     "api": "npm run dev --workspace=api",
     "web": "npm run dev --workspace=web --",
     "collector": "npm run dev --workspace=collector",
-    "scheduler": "npm run dev --workspace=scheduler"
+    "scheduler": "npm run dev --workspace=scheduler",
+    "worker": "npm run start --workspace=scheduler"
   }
 }

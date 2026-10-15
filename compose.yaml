@@ -28,6 +28,24 @@ services:
       retries: 5
       start_period: 20s
 
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["npm", "run", "worker"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/data/sentinel.db
+      ALERT_ENCRYPTION_KEY: ${ALERT_ENCRYPTION_KEY:-}
+      DEVICE_ENCRYPTION_KEY: ${DEVICE_ENCRYPTION_KEY:-}
+    volumes:
+      - sentinel_data:/data
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 3m
+
   web:
     build:
       context: .

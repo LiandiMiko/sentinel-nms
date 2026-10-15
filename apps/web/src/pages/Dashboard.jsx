@@ -7,6 +7,8 @@ import { formatDate, formatUptime } from "../utils/format";
 import AccountMenu from "../components/AccountMenu";
 import { useAuth } from "../auth/useAuth";
 
+const wait = (duration) => new Promise((resolve) => window.setTimeout(resolve, duration));
+
 const emptyDevice = {
     name: "",
     ipAddress: "",
@@ -193,10 +195,22 @@ export default function Dashboard() {
     async function pollNow() {
         setPolling(true);
         try {
-            await api.post("/metrics/poll");
+            const { data: queued } = await api.post("/metrics/poll");
+            const deadline = Date.now() + 5 * 60 * 1000;
+            let job;
+            do {
+                await wait(1500);
+                const { data: response } = await api.get(`/metrics/poll/${queued.data.id}`);
+                job = response.data;
+                if (job.status === "FAILED") throw new Error(job.error || "The polling worker failed.");
+            } while (["PENDING", "PROCESSING"].includes(job.status) && Date.now() < deadline);
+
+            if (job.status !== "COMPLETED") {
+                throw new Error(`Polling is still running in the worker (job ${job.id}). The dashboard will refresh automatically.`);
+            }
             await load();
         } catch (requestError) {
-            setError(requestError.response?.data?.message ?? "Polling could not be started.");
+            setError(requestError.response?.data?.message ?? requestError.message ?? "Polling could not be started.");
         } finally {
             setPolling(false);
         }

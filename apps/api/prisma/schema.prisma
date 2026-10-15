@@ -207,6 +207,19 @@ model AuditLog {
   @@index([status, createdAt])
 }
 
+model PollJob {
+  id          String   @id
+  status      String   @default("PENDING")
+  requestedAt DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  result      String?
+  error       String?
+
+  @@index([status, requestedAt])
+  @@index([completedAt])
+}
+
 model NotificationChannel {
   id        String   @id @default(cuid())
   name      String
