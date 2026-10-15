@@ -5,12 +5,27 @@ import prisma from "../../core/database/prisma.js";
 
 const MAX_EXCEL_ROWS = 50000;
 const MAX_PDF_ROWS = 5000;
+/** Match device-event.repository: resolved outages shorter than this are treated as flaps. */
+const MIN_OUTAGE_DURATION_MS = 60 * 1000;
+
+function formatDurationSeconds(totalSeconds) {
+    const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remaining = seconds % 60;
+    if (days) return `${days}d ${hours}h ${minutes}m`;
+    if (hours) return `${hours}h ${minutes}m`;
+    if (minutes) return `${minutes}m ${remaining}s`;
+    return `${remaining}s`;
+}
 
 class ReportService {
     async rows(type, { from, to, deviceId }, format) {
         const take = format === "pdf" ? MAX_PDF_ROWS : MAX_EXCEL_ROWS;
-        const rows = type === "metrics"
-            ? await prisma.metric.findMany({
+        let rows;
+        if (type === "metrics") {
+            rows = await prisma.metric.findMany({
                 where: {
                     createdAt: { gte: from, lte: to },
                     ...(deviceId ? { deviceId } : {})
@@ -18,9 +33,9 @@ class ReportService {
                 include: { device: { select: { name: true, ipAddress: true } } },
                 orderBy: { createdAt: "desc" },
                 take: take + 1
-            })
-            : type === "alerts"
-                ? await prisma.alert.findMany({
+            });
+        } else if (type === "alerts") {
+            rows = await prisma.alert.findMany({
                 where: {
                     triggeredAt: { gte: from, lte: to },
                     ...(deviceId ? { deviceId } : {})
@@ -28,16 +43,24 @@ class ReportService {
                 include: { rule: { select: { name: true, severity: true } } },
                 orderBy: { triggeredAt: "desc" },
                 take: take + 1
-                })
-                : await prisma.deviceEvent.findMany({
-                    where: {
-                        startedAt: { gte: from, lte: to },
-                        ...(deviceId ? { deviceId } : {})
-                    },
-                    include: { device: { select: { name: true, ipAddress: true } } },
-                    orderBy: { startedAt: "desc" },
-                    take: take + 1
-                });
+            });
+        } else {
+            // Fetch extra then filter flaps so short-lived noise does not fill the report.
+            const fetched = await prisma.deviceEvent.findMany({
+                where: {
+                    startedAt: { gte: from, lte: to },
+                    ...(deviceId ? { deviceId } : {})
+                },
+                include: { device: { select: { name: true, ipAddress: true } } },
+                orderBy: { startedAt: "desc" },
+                take: Math.min(take * 3, MAX_EXCEL_ROWS + 1)
+            });
+            rows = fetched.filter((event) => {
+                if (!event.resolvedAt) return true;
+                const durationMs = event.resolvedAt.getTime() - event.startedAt.getTime();
+                return !Number.isFinite(durationMs) || durationMs >= MIN_OUTAGE_DURATION_MS;
+            });
+        }
         if (rows.length > take) {
             const error = new Error(`This ${format.toUpperCase()} report exceeds its ${take.toLocaleString()}-row limit. Narrow the date range or filter the selected device.`);
             error.status = 413;
@@ -104,8 +127,8 @@ class ReportService {
         return {
             timestamp: row.startedAt.toISOString(),
             resolvedAt: row.resolvedAt?.toISOString() ?? "Ongoing",
-            duration: `${durationSeconds}s`,
-            type: row.type,
+            duration: formatDurationSeconds(durationSeconds),
+            type: row.type === "device-outage" ? "Device" : row.type === "interface-outage" ? "Interface" : row.type,
             device: row.device.name,
             ipAddress: row.device.ipAddress,
             subject: row.subject,
