@@ -21,7 +21,7 @@ describe("abandoned polling job recovery", () => {
         directories.push(directory);
         const databasePath = join(directory, "poll-jobs.db");
         const fixture = new DatabaseSync(databasePath);
-        fixture.exec(`
+                fixture.exec(`
             CREATE TABLE "PollJob" (
                 "id" TEXT PRIMARY KEY,
                 "status" TEXT NOT NULL,
@@ -32,9 +32,10 @@ describe("abandoned polling job recovery", () => {
                 "completedAt" DATETIME,
                 "nextAttemptAt" DATETIME
             );
-            INSERT INTO "PollJob" VALUES
-                ('stale-job', 'PROCESSING', datetime('now', '-30 minutes'), 'worker stopped'),
-                ('recent-job', 'PROCESSING', datetime('now', '-1 minute'), NULL);
+            INSERT INTO "PollJob" ("id", "status", "startedAt", "error", "attempts", "maxAttempts")
+            VALUES
+                ('stale-job', 'PROCESSING', datetime('now', '-30 minutes'), 'worker stopped', 1, 3),
+                ('recent-job', 'PROCESSING', datetime('now', '-1 minute'), NULL, 1, 3);
         `);
         fixture.close();
 
