@@ -5,6 +5,7 @@ import deviceRepository from "../devices/device.repository.js";
 import metricRepository from "./metric.repository.js";
 import deviceEventRepository from "./device-event.repository.js";
 import alertService from "../alerts/alert.service.js";
+import pingService from "../../core/ping/ping.service.js";
 
 const LEGACY_INTERFACE_COUNTERS = {
     in: "1.3.6.1.2.1.2.2.1.10",
@@ -75,15 +76,36 @@ class MetricService {
     pollingPromise = null;
 
     async pollDevice(device) {
+        const pingPromise = pingService.ping(device.ipAddress, { count: 2, timeoutMs: 1000 }).catch(() => ({
+            alive: false,
+            packetLoss: 100,
+            latency: null
+        }));
+
         const session = this.createDeviceSession(device);
         try {
-            const required = await this.getSessionValues(session, [OID.sysName, OID.sysUpTime]);
+            const [required, pingResult] = await Promise.all([
+                this.getSessionValues(session, [OID.sysName, OID.sysUpTime]),
+                pingPromise
+            ]);
+
             if (required.some((value) => value === null)) {
                 throw new Error("SNMP system name or uptime is unavailable");
             }
+
+            const pingMetrics = [
+                makeMetric(device.id, "1.3.6.1.2.1.1.99.2", "ping.packetLoss", String(pingResult.packetLoss), "percent")
+            ];
+            if (pingResult.latency !== null) {
+                pingMetrics.push(
+                    makeMetric(device.id, "1.3.6.1.2.1.1.99.1", "ping.latency", String(pingResult.latency), "ms")
+                );
+            }
+
             const metrics = [
                 makeMetric(device.id, OID.sysName, "hostname", required[0]),
                 makeMetric(device.id, OID.sysUpTime, "uptime", required[1], "hundredths"),
+                ...pingMetrics,
                 ...await this.pollSystemDetails(session, device.id)
             ];
             const interfaces = await this.pollInterfaces(session, device.id);
@@ -116,7 +138,9 @@ class MetricService {
                 ipAddress: device.ipAddress,
                 status: "up",
                 metrics: metrics.length + interfaceMetrics.length,
-                interfaces: interfaces.length
+                interfaces: interfaces.length,
+                latency: pingResult.latency,
+                packetLoss: pingResult.packetLoss
             };
         } finally {
             session.close();
@@ -557,23 +581,52 @@ class MetricService {
                 try {
                     results[index] = await this.pollDevice(device);
                 } catch (err) {
-                    if (device.status !== "down") {
-                        await deviceEventRepository.start({
-                            deviceId: device.id,
-                            type: "device-outage",
-                            subject: device.name,
-                            message: err.message,
-                            startedAt: new Date()
-                        });
+                    let pingFallback = null;
+                    try {
+                        pingFallback = await pingService.ping(device.ipAddress, { count: 1, timeoutMs: 1000 });
+                    } catch {
+                        // ignore ping fallback error
                     }
-                    await deviceRepository.markDown(device.id, err.message);
-                    results[index] = {
-                        deviceId: device.id,
-                        deviceName: device.name,
-                        ipAddress: device.ipAddress,
-                        status: "down",
-                        error: err.message
-                    };
+
+                    if (pingFallback?.alive) {
+                        const pingMetrics = [
+                            makeMetric(device.id, "1.3.6.1.2.1.1.99.2", "ping.packetLoss", String(pingFallback.packetLoss), "percent")
+                        ];
+                        if (pingFallback.latency !== null) {
+                            pingMetrics.push(
+                                makeMetric(device.id, "1.3.6.1.2.1.1.99.1", "ping.latency", String(pingFallback.latency), "ms")
+                            );
+                        }
+                        await metricRepository.createMany(pingMetrics);
+                        await deviceRepository.updateLastSeen(device.id);
+                        results[index] = {
+                            deviceId: device.id,
+                            deviceName: device.name,
+                            ipAddress: device.ipAddress,
+                            status: "up",
+                            warning: `SNMP query failed (${err.message}), ICMP ping is OK`,
+                            latency: pingFallback.latency,
+                            packetLoss: pingFallback.packetLoss
+                        };
+                    } else {
+                        if (device.status !== "down") {
+                            await deviceEventRepository.start({
+                                deviceId: device.id,
+                                type: "device-outage",
+                                subject: device.name,
+                                message: err.message,
+                                startedAt: new Date()
+                            });
+                        }
+                        await deviceRepository.markDown(device.id, err.message);
+                        results[index] = {
+                            deviceId: device.id,
+                            deviceName: device.name,
+                            ipAddress: device.ipAddress,
+                            status: "down",
+                            error: err.message
+                        };
+                    }
                 }
             }
         };
@@ -628,6 +681,21 @@ class MetricService {
         return [...interfaces.values()];
     }
 
+    /**
+     * Retrieves aggregated metric history for a given device and metric name.
+     * Supports optional time range (seconds) and max number of points.
+     *
+     * @param {string} deviceId
+     * @param {string} name metric name (e.g., 'ping.latency')
+     * @param {number|null} rangeSeconds time window from now (optional)
+     * @param {number|null} maxPoints max rows to return (optional)
+     * @returns {Promise<Array>} aggregated rows { bucketStart, avgValue, minValue, maxValue, count }
+     */
+    async getHistoryWindow(deviceId, name, rangeSeconds = null, maxPoints = null) {
+        // Use repository's findHistoryWindow which already does the bucket aggregation.
+        return metricRepository.findHistoryWindow(deviceId, name, rangeSeconds, maxPoints);
+    }
+
     async getSummary(deviceId) {
         if (!(await deviceRepository.findById(deviceId))) {
             const error = new Error("Device not found");
@@ -676,13 +744,19 @@ class MetricService {
             }
             return [...values.values()];
         };
+        const pingLatency = latest.get("ping.latency")?.value ? Number(latest.get("ping.latency").value) : null;
+        const packetLoss = latest.get("ping.packetLoss")?.value ? Number(latest.get("ping.packetLoss").value) : null;
         return {
             system,
             cpuCores,
             memory: Object.keys(memory).length ? memory : null,
             storage: [...storage.values()],
             hardware: groupMetrics("hardware"),
-            sensors: groupMetrics("sensor")
+            sensors: groupMetrics("sensor"),
+            ping: {
+                latency: pingLatency,
+                packetLoss: packetLoss
+            }
         };
     }
 

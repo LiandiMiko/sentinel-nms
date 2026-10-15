@@ -393,20 +393,32 @@ const visibleDevices = devices;
                             <button className="icon-button" onClick={load} title="Refresh list" disabled={refreshing}><RefreshCw size={16} className={refreshing ? "spin" : ""} /></button></div></div>
                         <div className="table-wrap">
                             <table className="device-table">
-                                <thead><tr><th>DEVICE</th><th>STATUS</th><th>CPU LOAD</th><th>UPTIME</th><th>LAST SEEN</th><th><span className="sr-only">Actions</span></th></tr></thead>
+                                <thead><tr><th>DEVICE</th><th>STATUS</th><th>LATENCY (RTT)</th><th>CPU LOAD</th><th>UPTIME</th><th>LAST SEEN</th><th><span className="sr-only">Actions</span></th></tr></thead>
                                 <tbody>
                                     {devices.map((device) => (
                                         <tr key={device.id}>
                                             <td><div className="device-cell"><span className="device-symbol"><Router size={18} /></span><span><Link to={`/device/${device.id}`} className="device-name">{device.name}</Link><small>{device.ipAddress}</small><span className="device-labels">{[...(device.groups ?? []).map((group) => group.name), ...(device.tags ?? []).map((tag) => `#${tag.name}`)].slice(0, 4).join(" · ")}</span></span></div></td>
                                             <td><span className={`status-badge ${device.status.toLowerCase()}`}><i />{device.status === "UP" ? "Online" : device.status === "DISABLED" ? "Disabled" : "Offline"}</span></td>
+                                            <td>
+                                                {device.metrics?.pingLatency != null ? (
+                                                    <span className="latency-cell">
+                                                        <strong>{device.metrics.pingLatency} ms</strong>
+                                                        {Number(device.metrics.packetLoss) > 0 && (
+                                                            <span className="loss-badge" title="Packet loss"> · {device.metrics.packetLoss}% loss</span>
+                                                        )}
+                                                    </span>
+                                                ) : (
+                                                    <span className="muted">—</span>
+                                                )}
+                                            </td>
                                             <td><span className="cpu-value">{device.metrics?.cpu != null ? `${Number(device.metrics.cpu) / 10}%` : "—"}</span></td>
                                             <td>{formatUptime(device.metrics?.uptime)}</td>
                                             <td className="muted">{formatDate(device.lastSeen)}</td>
                                             <td><div className="row-actions"><Link to={`/device/${device.id}`} className="icon-button" title="View device"><Cpu size={16} /></Link>{canManage && <><button className="icon-button" title="Edit device" onClick={() => setDialogDevice(device)}><Pencil size={15} /></button><button className="icon-button danger-hover" title="Delete device" onClick={() => removeDevice(device)}><Trash2 size={15} /></button></>}</div></td>
                                         </tr>
                                     ))}
-                                    {!initialLoading && devices.length === 0 && <tr><td colSpan="6" className="table-empty">{search || filter !== "ALL" || groupFilter || tagFilter ? "No devices match these filters. Clear a filter or search for another device." : "No devices have been added yet. Add a device to begin monitoring."}</td></tr>}
-                                    {visibleDevices.length === 0 && <tr><td colSpan="6"><div className="empty-state" aria-live="polite"><span className="empty-icon"><Router size={23} /></span><strong>{initialLoading ? "Loading devices..." : error && devices.length === 0 ? "Devices could not be loaded" : devices.length === 0 ? "Your network is ready" : "No matching devices"}</strong><p>{initialLoading ? "Fetching the latest monitoring data." : error && devices.length === 0 ? "Check the API connection, then refresh." : devices.length === 0 ? "Add your first SNMP device to start monitoring." : "Try selecting a different status filter."}</p>{!initialLoading && !error && devices.length === 0 && canManage && <button className="button button-primary" onClick={() => setDialogDevice(null)}><CirclePlus size={16} />Add your first device</button>}</div></td></tr>}
+                                    {!initialLoading && devices.length === 0 && <tr><td colSpan="7" className="table-empty">{search || filter !== "ALL" || groupFilter || tagFilter ? "No devices match these filters. Clear a filter or search for another device." : "No devices have been added yet. Add a device to begin monitoring."}</td></tr>}
+                                    {visibleDevices.length === 0 && <tr><td colSpan="7"><div className="empty-state" aria-live="polite"><span className="empty-icon"><Router size={23} /></span><strong>{initialLoading ? "Loading devices..." : error && devices.length === 0 ? "Devices could not be loaded" : devices.length === 0 ? "Your network is ready" : "No matching devices"}</strong><p>{initialLoading ? "Fetching the latest monitoring data." : error && devices.length === 0 ? "Check the API connection, then refresh." : devices.length === 0 ? "Add your first SNMP device to start monitoring." : "Try selecting a different status filter."}</p>{!initialLoading && !error && devices.length === 0 && canManage && <button className="button button-primary" onClick={() => setDialogDevice(null)}><CirclePlus size={16} />Add your first device</button>}</div></td></tr>}
                                 </tbody>
                             </table>
                         </div>

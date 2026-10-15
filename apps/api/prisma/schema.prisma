@@ -54,6 +54,7 @@ model Metric {
 
   @@index([createdAt])
   @@index([deviceId, name, createdAt])
+  @@index([name, createdAt])
 }
 
 model DeviceSnapshot {
@@ -245,4 +246,19 @@ model AlertRuleChannel {
 
   @@id([ruleId, channelId])
   @@index([channelId])
+}
+
+model AggregatedMetric {
+  id        String   @id @default(cuid())
+  deviceId  String
+  name      String
+  bucketStart DateTime
+  avgValue  Float
+  minValue  Float
+  maxValue  Float
+  count     Int
+  createdAt DateTime @default(now())
+
+  @@index([deviceId, name, bucketStart])
+  @@index([bucketStart])
 }

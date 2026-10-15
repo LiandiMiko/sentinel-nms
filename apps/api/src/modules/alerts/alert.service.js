@@ -36,8 +36,9 @@ class AlertService {
         if (ruleData.groupId !== undefined) await this.validateGroup(ruleData.groupId);
         if (channelIds !== undefined) await this.validateChannels(channelIds);
         const nextRule = { ...currentRule, ...ruleData };
-        if ((nextRule.type === "CPU_ABOVE" || nextRule.type === "MEMORY_ABOVE") && nextRule.threshold == null) {
-            const error = new Error(`${nextRule.type === "MEMORY_ABOVE" ? "Memory" : "CPU"} alert rules require a threshold`);
+        const requiresThreshold = ["CPU_ABOVE", "MEMORY_ABOVE", "HIGH_LATENCY", "PACKET_LOSS"].includes(nextRule.type);
+        if (requiresThreshold && nextRule.threshold == null) {
+            const error = new Error(`${nextRule.type} alert rules require a threshold`);
             error.status = 400;
             throw error;
         }
@@ -147,9 +148,12 @@ class AlertService {
                     });
                     await notificationService.sendForAlert(alert);
                 } else if (!condition.met && active) {
-                    await prisma.alert.update({
+                    const resolvedAlert = await prisma.alert.update({
                         where: { id: active.id },
                         data: { state: "resolved", resolvedAt: new Date() }
+                    });
+                    await notificationService.sendForResolvedAlert(resolvedAlert).catch((err) => {
+                        console.error("[Alerts] Recovery notification error:", err.message);
                     });
                 }
             }
@@ -196,6 +200,42 @@ class AlertService {
                 value: Number.isFinite(usedPercent) ? `${usedPercent.toFixed(1)}%` : null,
                 message: met
                     ? `memory is ${usedPercent.toFixed(1)}% (threshold ${rule.threshold}%)`
+                    : ""
+            };
+        }
+
+        if (rule.type === "HIGH_LATENCY") {
+            const sample = await prisma.metric.findFirst({
+                where: { deviceId: device.id, name: "ping.latency" },
+                orderBy: { createdAt: "desc" },
+                select: { value: true, createdAt: true }
+            });
+            const latency = sample ? Number(sample.value) : NaN;
+            const met = pollResult?.status === "up"
+                && Number.isFinite(latency)
+                && latency > rule.threshold;
+            return {
+                met,
+                value: Number.isFinite(latency) ? `${latency.toFixed(1)} ms` : null,
+                message: met
+                    ? `latency is ${latency.toFixed(1)} ms (threshold ${rule.threshold} ms)`
+                    : ""
+            };
+        }
+
+        if (rule.type === "PACKET_LOSS") {
+            const sample = await prisma.metric.findFirst({
+                where: { deviceId: device.id, name: "ping.packetLoss" },
+                orderBy: { createdAt: "desc" },
+                select: { value: true, createdAt: true }
+            });
+            const packetLoss = sample ? Number(sample.value) : NaN;
+            const met = Number.isFinite(packetLoss) && packetLoss > rule.threshold;
+            return {
+                met,
+                value: Number.isFinite(packetLoss) ? `${packetLoss}%` : null,
+                message: met
+                    ? `packet loss is ${packetLoss}% (threshold ${rule.threshold}%)`
                     : ""
             };
         }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Clock3, Cpu, Gauge, HardDrive, Info, Router, Signal, Wifi } from "lucide-react";
+import { Activity, ArrowLeft, Clock3, Cpu, Gauge, HardDrive, Info, Router, Signal, Wifi } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getDevice } from "../api/dashboard";
 import { getMetricHistory, getInterfaces, getDeviceMetricSummary, getDeviceEvents } from "../api/metric";
@@ -100,6 +100,7 @@ export default function DeviceDetail() {
     const [device, setDevice] = useState(null);
     const [cpuHistory, setCpuHistory] = useState([]);
     const [memoryHistory, setMemoryHistory] = useState([]);
+    const [pingHistory, setPingHistory] = useState([]);
     const [interfaces, setInterfaces] = useState([]);
     const [deviceMetrics, setDeviceMetrics] = useState(null);
     const [deviceEvents, setDeviceEvents] = useState([]);
@@ -121,10 +122,11 @@ export default function DeviceDetail() {
 
     const load = useCallback(async () => {
         try {
-            const [deviceData, history, memorySamples, interfaceData, metricSummary, events] = await Promise.all([
+            const [deviceData, history, memorySamples, pingSamples, interfaceData, metricSummary, events] = await Promise.all([
                 getDevice(id),
                 getMetricHistory(id, "cpu", 100, rangeSeconds),
                 getMetricHistory(id, "memory.usedPercent", 100, rangeSeconds),
+                getMetricHistory(id, "ping.latency", 100, rangeSeconds).catch(() => []),
                 getInterfaces(id),
                 getDeviceMetricSummary(id),
                 getDeviceEvents(id)
@@ -143,6 +145,11 @@ export default function DeviceDetail() {
             setMemoryHistory(memorySamples.map((item) => ({
                 time: formatHistoryTime(item.createdAt, rangeSeconds),
                 usedPercent: Number(item.value),
+                createdAt: item.createdAt
+            })));
+            setPingHistory((pingSamples || []).map((item) => ({
+                time: formatHistoryTime(item.createdAt, rangeSeconds),
+                latency: Number(item.value),
                 createdAt: item.createdAt
             })));
             setInterfaces(interfaceData);
@@ -282,6 +289,8 @@ export default function DeviceDetail() {
                         </div>
                         <div className="detail-stats">
                             <article className="detail-stat"><span className="detail-stat-icon blue"><Router size={18} /></span><span><small>HOSTNAME</small><strong>{device.snapshot?.hostname || "Not reported"}</strong></span></article>
+                            <article className="detail-stat"><span className="detail-stat-icon blue"><Activity size={18} /></span><span><small>LATENCY (RTT)</small><strong>{deviceMetrics?.ping?.latency != null ? `${deviceMetrics.ping.latency} ms` : "—"}</strong></span></article>
+                            <article className="detail-stat"><span className="detail-stat-icon green"><Signal size={18} /></span><span><small>PACKET LOSS</small><strong>{deviceMetrics?.ping?.packetLoss != null ? `${deviceMetrics.ping.packetLoss}%` : "0%"}</strong></span></article>
                             <article className="detail-stat"><span className="detail-stat-icon violet"><Cpu size={18} /></span><span><small>CPU LOAD</small><strong>{device.snapshot?.cpu ? `${Number(device.snapshot.cpu) / 10}%` : "—"}</strong></span></article>
                             <article className="detail-stat"><span className="detail-stat-icon amber"><Clock3 size={18} /></span><span><small>UPTIME</small><strong>{formatUptime(device.snapshot?.uptime)}</strong></span></article>
                             <article className="detail-stat"><span className="detail-stat-icon green"><Wifi size={18} /></span><span><small>LAST SEEN</small><strong>{formatDate(device.lastSeen)}</strong></span></article>
@@ -361,6 +370,9 @@ export default function DeviceDetail() {
                         {memoryHistory.length > 0 && <section className="chart-card">
                             <div className="chart-heading"><div><span className="eyebrow">MEMORY HISTORY</span><h2>RAM utilization</h2><p>Recent usage samples from HOST-RESOURCES-MIB.</p></div></div>
                             <div className="chart-area"><ResponsiveContainer width="100%" height="100%"><LineChart data={memoryHistory} margin={{ top: 10, right: 12, left: -16, bottom: 0 }}><CartesianGrid stroke="#edf0f4" vertical={false} /><XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fill: "#8a94a6", fontSize: 11 }} minTickGap={40} /><YAxis domain={[0, 100]} unit="%" tickLine={false} axisLine={false} tick={{ fill: "#8a94a6", fontSize: 11 }} /><Tooltip formatter={(value) => [`${Number(value).toFixed(1)}%`, "RAM"]} /><Line type="monotone" dataKey="usedPercent" name="RAM used" stroke="#d29b42" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer></div>
+                        {pingHistory.length > 0 && <section className="chart-card">
+                            <div className="chart-heading"><div><span className="eyebrow">LATENCY MONITORING</span><h2>ICMP Ping Latency (RTT)</h2><p>Round-trip response time in milliseconds.</p></div></div>
+                            <div className="chart-area"><ResponsiveContainer width="100%" height="100%"><LineChart data={pingHistory} margin={{ top: 10, right: 12, left: -16, bottom: 0 }}><CartesianGrid stroke="#edf0f4" vertical={false} /><XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fill: "#8a94a6", fontSize: 11 }} minTickGap={40} /><YAxis unit=" ms" tickLine={false} axisLine={false} tick={{ fill: "#8a94a6", fontSize: 11 }} /><Tooltip formatter={(value) => [`${Number(value).toFixed(1)} ms`, "Latency"]} /><Line type="monotone" dataKey="latency" name="Latency" stroke="#2563eb" strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: "#2563eb" }} /></LineChart></ResponsiveContainer></div>
                         </section>}
                         <section className="chart-card traffic-card">
                             <div className="chart-heading"><div><span className="eyebrow">INTERFACE MONITORING</span><h2>Network traffic</h2><p>Inbound and outbound throughput</p></div>{interfaces.length > 0 && <select className="interface-select" value={selectedInterface} onChange={(event) => setSelectedInterface(event.target.value)}>{interfaces.map((item) => <option key={item.index} value={item.index}>{item.name || `Interface ${item.index}`}</option>)}</select>}</div>

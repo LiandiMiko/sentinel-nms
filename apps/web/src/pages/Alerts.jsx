@@ -76,7 +76,7 @@ export default function Alerts() {
         setSaving(true);
         setError("");
         try {
-            const needsThreshold = form.type === "CPU_ABOVE" || form.type === "MEMORY_ABOVE";
+            const needsThreshold = ["CPU_ABOVE", "MEMORY_ABOVE", "HIGH_LATENCY", "PACKET_LOSS"].includes(form.type);
             const rule = {
                 ...form,
                 threshold: needsThreshold ? Number(form.threshold) : null,
@@ -145,13 +145,15 @@ export default function Alerts() {
                             <label>Condition<select name="type" value={form.type} onChange={update}>
                                 <option value="CPU_ABOVE">CPU exceeds</option>
                                 <option value="MEMORY_ABOVE">Memory exceeds</option>
+                                <option value="HIGH_LATENCY">Ping latency exceeds (ms)</option>
+                                <option value="PACKET_LOSS">Packet loss exceeds (%)</option>
                                 <option value="DEVICE_DOWN">Device offline</option>
                                 <option value="INTERFACE_DOWN">Interface / port down</option>
                             </select></label>
-                            {(form.type === "CPU_ABOVE" || form.type === "MEMORY_ABOVE") ? (
+                            {["CPU_ABOVE", "MEMORY_ABOVE", "HIGH_LATENCY", "PACKET_LOSS"].includes(form.type) ? (
                                 <label>
-                                    Threshold (%)
-                                    <input name="threshold" type="number" min="0" max="100" value={form.threshold} onChange={update} required />
+                                    {form.type === "HIGH_LATENCY" ? "Threshold (ms)" : "Threshold (%)"}
+                                    <input name="threshold" type="number" min="0" max={form.type === "HIGH_LATENCY" ? 10000 : 100} value={form.threshold} onChange={update} required />
                                 </label>
                             ) : (
                                 <label>
@@ -177,6 +179,8 @@ export default function Alerts() {
                                     <td>
                                         {rule.type === "CPU_ABOVE" && `CPU > ${rule.threshold}%`}
                                         {rule.type === "MEMORY_ABOVE" && `Memory > ${rule.threshold}%`}
+                                        {rule.type === "HIGH_LATENCY" && `Latency > ${rule.threshold} ms`}
+                                        {rule.type === "PACKET_LOSS" && `Packet loss > ${rule.threshold}%`}
                                         {rule.type === "DEVICE_DOWN" && `Offline > ${rule.durationSeconds}s`}
                                         {rule.type === "INTERFACE_DOWN" && `Interface down > ${rule.durationSeconds}s`}
                                     </td>

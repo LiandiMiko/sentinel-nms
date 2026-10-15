@@ -22,6 +22,7 @@ import { auditRequest } from "./modules/auth/audit.middleware.js";
 import prisma from "./core/database/prisma.js";
 import { validateRuntimeConfiguration } from "./core/config/runtime-validation.js";
 import operationalMonitor from "./modules/dashboard/operational-monitor.service.js";
+import { startMetricAggregator } from "./modules/metrics/aggregator.service.js";
 
 const app = express();
 const allowedOrigins = new Set(env.webOrigins);
@@ -84,6 +85,8 @@ async function start() {
     await validateRuntimeConfiguration(prisma);
     await authService.initialize();
     operationalMonitor.start();
+    // Start hourly metric aggregation and pruning
+    startMetricAggregator();
     app.listen(PORT, () => {
         console.log("\n======================================");
         console.log("Sentinel NMS API");

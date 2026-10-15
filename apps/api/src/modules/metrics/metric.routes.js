@@ -8,6 +8,10 @@ router.get(
     "/device/:id",
     asyncHandler(metricController.history.bind(metricController))
 );
+router.get(
+    "/device/:id/historyWindow",
+    asyncHandler(metricController.historyWindow.bind(metricController))
+);
 
 router.post("/poll", asyncHandler(metricController.poll.bind(metricController)));
 router.get("/poll/:id", asyncHandler(metricController.pollStatus.bind(metricController)));

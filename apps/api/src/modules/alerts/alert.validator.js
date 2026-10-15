@@ -2,9 +2,9 @@ import { z } from "zod";
 
 const ruleFields = {
     name: z.string().trim().min(1).max(100),
-    type: z.enum(["CPU_ABOVE", "MEMORY_ABOVE", "DEVICE_DOWN", "INTERFACE_DOWN"]),
+    type: z.enum(["CPU_ABOVE", "MEMORY_ABOVE", "DEVICE_DOWN", "INTERFACE_DOWN", "HIGH_LATENCY", "PACKET_LOSS"]),
     severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("HIGH"),
-    threshold: z.coerce.number().min(0).max(100).optional().nullable(),
+    threshold: z.coerce.number().min(0).max(10000).optional().nullable(),
     durationSeconds: z.coerce.number().int().min(0).max(86400).default(0),
     enabled: z.boolean().default(true),
     groupId: z.string().nullable().optional(),
@@ -12,7 +12,7 @@ const ruleFields = {
 };
 
 function requiresThreshold(type) {
-    return type === "CPU_ABOVE" || type === "MEMORY_ABOVE";
+    return type === "CPU_ABOVE" || type === "MEMORY_ABOVE" || type === "HIGH_LATENCY" || type === "PACKET_LOSS";
 }
 
 function rejectsThreshold(type) {
@@ -24,7 +24,7 @@ export const createRuleSchema = z.object(ruleFields).strict().superRefine((rule,
         ctx.addIssue({
             code: "custom",
             path: ["threshold"],
-            message: `${rule.type === "MEMORY_ABOVE" ? "Memory" : "CPU"} rules require a threshold`
+            message: `${rule.type} rules require a threshold`
         });
     }
     if (rejectsThreshold(rule.type) && rule.threshold != null) {

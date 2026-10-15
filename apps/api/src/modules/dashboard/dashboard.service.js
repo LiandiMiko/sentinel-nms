@@ -6,6 +6,27 @@ class DashboardService {
     async devices(filters) {
         const devices = await deviceRepository.findAllWithMetrics(filters);
 
+        const deviceIds = devices.map((d) => d.id);
+        const pingMetrics = deviceIds.length ? await prisma.metric.findMany({
+            where: {
+                deviceId: { in: deviceIds },
+                name: { in: ["ping.latency", "ping.packetLoss"] }
+            },
+            orderBy: { createdAt: "desc" },
+            take: deviceIds.length * 4
+        }) : [];
+
+        const pingMap = new Map();
+        for (const item of pingMetrics) {
+            if (!pingMap.has(item.deviceId)) pingMap.set(item.deviceId, {});
+            const target = pingMap.get(item.deviceId);
+            if (item.name === "ping.latency" && target.latency === undefined) {
+                target.latency = Number(item.value);
+            } else if (item.name === "ping.packetLoss" && target.packetLoss === undefined) {
+                target.packetLoss = Number(item.value);
+            }
+        }
+
         return devices.map((device) => {
             const now = Date.now();
 
@@ -21,10 +42,13 @@ class DashboardService {
                     ? "UP"
                     : "DOWN";
 
+            const pingInfo = pingMap.get(device.id);
             const metrics = {
                 hostname: device.snapshot?.hostname,
                 uptime: device.snapshot?.uptime,
-                cpu: device.snapshot?.cpu
+                cpu: device.snapshot?.cpu,
+                pingLatency: pingInfo?.latency ?? null,
+                packetLoss: pingInfo?.packetLoss ?? null
             };
 
             return {

@@ -23,6 +23,18 @@ class MetricController {
         res.json({ success: true, data: job });
     }
 
+    async historyWindow(req, res) {
+        const { id } = req.params;
+        const { name = "ping.latency", rangeSeconds, maxPoints } = req.query;
+        const data = await metricService.getHistoryWindow(
+            id,
+            name,
+            rangeSeconds ? Number(rangeSeconds) : null,
+            maxPoints ? Number(maxPoints) : null
+        );
+        res.json({ success: true, data });
+    }
+
     async history(req, res) {
         const { id } = req.params;
         const { name = "cpu", limit = 100, rangeSeconds } = req.query;

@@ -19,6 +19,7 @@ const Reports = lazy(() => import("./pages/Reports"));
 const Users = lazy(() => import("./pages/Users"));
 const Account = lazy(() => import("./pages/Account"));
 const AuditLog = lazy(() => import("./pages/AuditLog"));
+const Performance = lazy(() => import("./pages/Performance"));
 
 function RequireAuth({ children, role }) {
     const { user, loading } = useAuth();
@@ -42,6 +43,7 @@ export default function App() {
                     <Route path="/settings" element={<RequireAuth><Suspense fallback={<div className="loading-state">Loading settings...</div>}><Settings /></Suspense></RequireAuth>} />
                     <Route path="/discovery" element={<RequireAuth><Suspense fallback={<div className="loading-state">Loading discovery...</div>}><Discovery /></Suspense></RequireAuth>} />
                     <Route path="/reports" element={<RequireAuth><Suspense fallback={<div className="loading-state">Loading reports...</div>}><Reports /></Suspense></RequireAuth>} />
+                    <Route path="/performance" element={<RequireAuth><Suspense fallback={<div className="loading-state">Loading performance...</div>}><Performance /></Suspense></RequireAuth>} />
                     <Route path="/users" element={<RequireAuth role="SUPER_ADMIN"><Suspense fallback={<div className="loading-state">Loading users...</div>}><Users /></Suspense></RequireAuth>} />
                     <Route path="/audit-log" element={<RequireAuth role="SUPER_ADMIN"><Suspense fallback={<div className="loading-state">Loading audit log...</div>}><AuditLog /></Suspense></RequireAuth>} />
                     <Route path="/account" element={<RequireAuth><Suspense fallback={<div className="loading-state">Loading account...</div>}><Account /></Suspense></RequireAuth>} />

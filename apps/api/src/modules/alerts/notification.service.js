@@ -61,14 +61,65 @@ class NotificationService {
     async sendForAlert(alert) {
         const links = await prisma.alertRuleChannel.findMany({
             where: { ruleId: alert.ruleId, channel: { enabled: true } },
-            include: { channel: true }
+            include: { channel: true, rule: true }
         });
 
-        await Promise.all(links.map(async ({ channel }) => {
+        await Promise.all(links.map(async ({ channel, rule }) => {
             try {
                 await this.send(channel, {
                     title: `Sentinel NMS: ${alert.deviceName}`,
-                    message: alert.message
+                    message: alert.message,
+                    deviceName: alert.deviceName,
+                    deviceIpAddress: alert.deviceIpAddress,
+                    severity: rule?.severity ?? "HIGH",
+                    type: rule?.type,
+                    state: "open",
+                    triggeredAt: alert.triggeredAt
+                });
+                await prisma.notificationChannel.update({
+                    where: { id: channel.id },
+                    data: { lastSentAt: new Date(), lastError: null }
+                });
+            } catch (error) {
+                console.error(`[Alerts] Notification channel ${channel.id} failed:`, error.message);
+                await prisma.notificationChannel.update({
+                    where: { id: channel.id },
+                    data: { lastError: error.message.slice(0, 500) }
+                });
+            }
+        }));
+    }
+
+    async sendForResolvedAlert(alert) {
+        const links = await prisma.alertRuleChannel.findMany({
+            where: { ruleId: alert.ruleId, channel: { enabled: true } },
+            include: { channel: true, rule: true }
+        });
+
+        const durationMs = alert.triggeredAt && alert.resolvedAt
+            ? new Date(alert.resolvedAt).getTime() - new Date(alert.triggeredAt).getTime()
+            : 0;
+        const durationSec = Math.max(0, Math.floor(durationMs / 1000));
+        const durationText = durationSec >= 86400
+            ? `${Math.floor(durationSec / 86400)}d ${Math.floor((durationSec % 86400) / 3600)}h`
+            : durationSec >= 3600
+                ? `${Math.floor(durationSec / 3600)}h ${Math.floor((durationSec % 3600) / 60)}m`
+                : durationSec >= 60
+                    ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
+                    : `${durationSec}s`;
+
+        await Promise.all(links.map(async ({ channel, rule }) => {
+            try {
+                await this.send(channel, {
+                    title: `Sentinel NMS [RECOVERED]: ${alert.deviceName}`,
+                    message: `${alert.message} telah pulih / normal.`,
+                    deviceName: alert.deviceName,
+                    deviceIpAddress: alert.deviceIpAddress,
+                    severity: rule?.severity ?? "INFO",
+                    type: rule?.type,
+                    state: "resolved",
+                    duration: durationText,
+                    resolvedAt: alert.resolvedAt
                 });
                 await prisma.notificationChannel.update({
                     where: { id: channel.id },
@@ -119,7 +170,12 @@ class NotificationService {
                 body: JSON.stringify({
                     source: "Sentinel NMS",
                     title: notification.title,
-                    message: notification.message
+                    message: notification.message,
+                    deviceName: notification.deviceName,
+                    deviceIpAddress: notification.deviceIpAddress,
+                    state: notification.state,
+                    severity: notification.severity,
+                    duration: notification.duration
                 }),
                 signal: AbortSignal.timeout(10000)
             });
@@ -128,12 +184,30 @@ class NotificationService {
         }
 
         if (channel.type === "TELEGRAM") {
+            const isResolved = notification.state === "resolved";
+            const icon = isResolved ? "🟢" : "🔴";
+            const statusLabel = isResolved ? "RECOVERED / NORMAL" : "ALERT / INCIDENT";
+            const escapeHtml = (text) => String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+            const lines = [
+                `<b>${icon} [${statusLabel}] Sentinel NMS</b>`,
+                `━━━━━━━━━━━━━━━━━━━━━━━━`,
+                `<b>Perangkat :</b> ${escapeHtml(notification.deviceName || notification.title)}`,
+                notification.deviceIpAddress ? `<b>IP Address:</b> <code>${escapeHtml(notification.deviceIpAddress)}</code>` : null,
+                notification.severity ? `<b>Severity  :</b> ${escapeHtml(notification.severity)}` : null,
+                `<b>Detail    :</b> ${escapeHtml(notification.message)}`,
+                notification.duration ? `<b>Downtime  :</b> ${escapeHtml(notification.duration)}` : null,
+                `━━━━━━━━━━━━━━━━━━━━━━━━`,
+                `<i>Waktu: ${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB</i>`
+            ].filter(Boolean);
+
             const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     chat_id: config.chatId,
-                    text: `${notification.title}\n${notification.message}`
+                    text: lines.join("\n"),
+                    parse_mode: "HTML"
                 }),
                 signal: AbortSignal.timeout(10000)
             });
