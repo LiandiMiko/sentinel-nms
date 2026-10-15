@@ -1,5 +1,4 @@
 import deviceRepository from "../devices/device.repository.js";
-import metricRepository from "../metrics/metric.repository.js";
 import prisma from "../../core/database/prisma.js";
 import operationsHealthService from "./operations-health.service.js";
 
@@ -53,6 +52,40 @@ class DashboardService {
 
     async summary() {
         const devices = await this.devices();
+        const groupMap = new Map();
+
+        const touchGroup = (id, name) => {
+            if (!groupMap.has(id)) {
+                groupMap.set(id, {
+                    id,
+                    name,
+                    total: 0,
+                    up: 0,
+                    down: 0,
+                    disabled: 0
+                });
+            }
+            return groupMap.get(id);
+        };
+
+        for (const device of devices) {
+            const targets = device.groups.length
+                ? device.groups
+                : [{ id: "__ungrouped__", name: "Ungrouped" }];
+            for (const group of targets) {
+                const bucket = touchGroup(group.id, group.name);
+                bucket.total += 1;
+                if (device.status === "UP") bucket.up += 1;
+                else if (device.status === "DISABLED") bucket.disabled += 1;
+                else bucket.down += 1;
+            }
+        }
+
+        const groups = [...groupMap.values()].sort((left, right) => {
+            if (left.id === "__ungrouped__") return 1;
+            if (right.id === "__ungrouped__") return -1;
+            return left.name.localeCompare(right.name);
+        });
 
         return {
             totalDevices: devices.length,
@@ -67,7 +100,8 @@ class DashboardService {
                 return !latest || current.lastSeen > latest
                     ? current.lastSeen
                     : latest;
-            }, null)
+            }, null),
+            groups
         };
     }
 
