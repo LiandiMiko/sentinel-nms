@@ -36,13 +36,13 @@ class AlertService {
         if (ruleData.groupId !== undefined) await this.validateGroup(ruleData.groupId);
         if (channelIds !== undefined) await this.validateChannels(channelIds);
         const nextRule = { ...currentRule, ...ruleData };
-        if (nextRule.type === "CPU_ABOVE" && nextRule.threshold == null) {
-            const error = new Error("CPU alert rules require a threshold");
+        if ((nextRule.type === "CPU_ABOVE" || nextRule.type === "MEMORY_ABOVE") && nextRule.threshold == null) {
+            const error = new Error(`${nextRule.type === "MEMORY_ABOVE" ? "Memory" : "CPU"} alert rules require a threshold`);
             error.status = 400;
             throw error;
         }
-        if (nextRule.type === "DEVICE_DOWN" && nextRule.threshold != null) {
-            const error = new Error("Device-down alert rules do not use a threshold");
+        if ((nextRule.type === "DEVICE_DOWN" || nextRule.type === "INTERFACE_DOWN") && nextRule.threshold != null) {
+            const error = new Error(`${nextRule.type === "INTERFACE_DOWN" ? "Interface-down" : "Device-down"} alert rules do not use a threshold`);
             error.status = 400;
             throw error;
         }
@@ -178,6 +178,49 @@ class AlertService {
                 met,
                 value: Number.isFinite(cpu) ? `${cpu}%` : null,
                 message: met ? `CPU is ${cpu}% (threshold ${rule.threshold}%)` : ""
+            };
+        }
+
+        if (rule.type === "MEMORY_ABOVE") {
+            const sample = await prisma.metric.findFirst({
+                where: { deviceId: device.id, name: "memory.usedPercent" },
+                orderBy: { createdAt: "desc" },
+                select: { value: true, createdAt: true }
+            });
+            const usedPercent = sample ? Number(sample.value) : NaN;
+            const met = pollResult?.status === "up"
+                && Number.isFinite(usedPercent)
+                && usedPercent > rule.threshold;
+            return {
+                met,
+                value: Number.isFinite(usedPercent) ? `${usedPercent.toFixed(1)}%` : null,
+                message: met
+                    ? `memory is ${usedPercent.toFixed(1)}% (threshold ${rule.threshold}%)`
+                    : ""
+            };
+        }
+
+        if (rule.type === "INTERFACE_DOWN") {
+            const openOutage = await prisma.deviceEvent.findFirst({
+                where: {
+                    deviceId: device.id,
+                    type: "interface-outage",
+                    resolvedAt: null
+                },
+                orderBy: { startedAt: "asc" },
+                select: { subject: true, startedAt: true, message: true }
+            });
+            if (!openOutage) {
+                return { met: false, value: null, message: "" };
+            }
+            const elapsedMs = Date.now() - openOutage.startedAt.getTime();
+            const met = elapsedMs >= rule.durationSeconds * 1000;
+            return {
+                met,
+                value: openOutage.subject,
+                message: met
+                    ? `interface ${openOutage.subject} down since ${openOutage.startedAt.toISOString()}`
+                    : ""
             };
         }
 
