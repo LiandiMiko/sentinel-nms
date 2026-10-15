@@ -76,9 +76,10 @@ export default function Alerts() {
         setSaving(true);
         setError("");
         try {
+            const needsThreshold = form.type === "CPU_ABOVE" || form.type === "MEMORY_ABOVE";
             const rule = {
                 ...form,
-                threshold: form.type === "CPU_ABOVE" ? Number(form.threshold) : null,
+                threshold: needsThreshold ? Number(form.threshold) : null,
                 durationSeconds: Number(form.durationSeconds),
                 groupId: form.groupId || null
             };
@@ -185,7 +186,7 @@ export default function Alerts() {
                                     <td>{canManage && <button className={`switch ${rule.enabled ? "on" : ""}`} type="button" onClick={() => toggleRule(rule)} aria-label={rule.enabled ? "Disable rule" : "Enable rule"}><i /></button>}</td>
                                     <td>{canManage && <button className="icon-button danger-hover" title="Delete rule" onClick={() => removeRule(rule)}><Trash2 size={15} /></button>}</td>
                                 </tr>)}
-                                {rules.length === 0 && <tr><td colSpan="7" className="table-empty-cell">{loading ? <span className="loading-inline" style={{ margin: 0, border: 0, background: "transparent", justifyContent: "center" }}>Loading alert rules...</span> : <EmptyState icon={BellRing} title="No alert rules yet" description={canManage ? "Create a rule above to watch CPU thresholds or device offline conditions." : "An administrator has not configured alert rules yet."} />}</td></tr>}</tbody>
+                                {rules.length === 0 && <tr><td colSpan="7" className="table-empty-cell">{loading ? <span className="loading-inline" style={{ margin: 0, border: 0, background: "transparent", justifyContent: "center" }}>Loading alert rules...</span> : <EmptyState icon={BellRing} title="No alert rules yet" description={canManage ? "Create a rule above for CPU, memory, device offline, or interface down conditions." : "An administrator has not configured alert rules yet."} />}</td></tr>}</tbody>
                             </table>
                         </div>
                     </section>
