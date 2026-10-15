@@ -141,8 +141,28 @@ export default function Alerts() {
                         <div className="phase2-section-heading"><div><span className="eyebrow">AUTOMATION</span><h2><BellRing size={18} /> Alert rules</h2></div></div>
                         {canManage && <form className="rule-form" onSubmit={saveRule}>
                             <label>Rule name<input name="name" value={form.name} onChange={update} placeholder="Core router CPU high" required maxLength="100" /></label>
-                            <label>Condition<select name="type" value={form.type} onChange={update}><option value="CPU_ABOVE">CPU exceeds</option><option value="DEVICE_DOWN">Device offline</option></select></label>
-                            {form.type === "CPU_ABOVE" ? <label>Threshold (%)<input name="threshold" type="number" min="0" max="100" value={form.threshold} onChange={update} required /></label> : <label>Offline duration (seconds)<input name="durationSeconds" type="number" min="0" max="86400" value={form.durationSeconds} onChange={update} /></label>}
+                            <label>Condition<select name="type" value={form.type} onChange={update}>
+                                <option value="CPU_ABOVE">CPU exceeds</option>
+                                <option value="MEMORY_ABOVE">Memory exceeds</option>
+                                <option value="DEVICE_DOWN">Device offline</option>
+                                <option value="INTERFACE_DOWN">Interface / port down</option>
+                            </select></label>
+                            {(form.type === "CPU_ABOVE" || form.type === "MEMORY_ABOVE") ? (
+                                <label>
+                                    Threshold (%)
+                                    <input name="threshold" type="number" min="0" max="100" value={form.threshold} onChange={update} required />
+                                </label>
+                            ) : (
+                                <label>
+                                    Minimum duration (seconds)
+                                    <input name="durationSeconds" type="number" min="0" max="86400" value={form.durationSeconds} onChange={update} />
+                                    <small>
+                                        {form.type === "INTERFACE_DOWN"
+                                            ? "Alert only after the interface has been down at least this long."
+                                            : "Alert only after the device has been offline at least this long."}
+                                    </small>
+                                </label>
+                            )}
                             <label>Severity<select name="severity" value={form.severity} onChange={update}><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select></label>
                             <label>Group<select name="groupId" value={form.groupId} onChange={update}><option value="">All devices</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
                             <label>Notify<select multiple value={form.channelIds} onChange={(event) => setForm((previous) => ({ ...previous, channelIds: [...event.target.selectedOptions].map((option) => option.value) }))} aria-label="Notification channels">{channels.filter((channel) => channel.enabled).map((channel) => <option key={channel.id} value={channel.id}>{channel.name}</option>)}</select></label>
@@ -153,7 +173,12 @@ export default function Alerts() {
                                 <thead><tr><th>RULE</th><th>CONDITION</th><th>SEVERITY</th><th>SCOPE</th><th>CHANNELS</th><th>STATUS</th><th /></tr></thead>
                                 <tbody>{rules.map((rule) => <tr key={rule.id}>
                                     <td><strong>{rule.name}</strong></td>
-                                    <td>{rule.type === "CPU_ABOVE" ? `CPU > ${rule.threshold}%` : `Offline > ${rule.durationSeconds}s`}</td>
+                                    <td>
+                                        {rule.type === "CPU_ABOVE" && `CPU > ${rule.threshold}%`}
+                                        {rule.type === "MEMORY_ABOVE" && `Memory > ${rule.threshold}%`}
+                                        {rule.type === "DEVICE_DOWN" && `Offline > ${rule.durationSeconds}s`}
+                                        {rule.type === "INTERFACE_DOWN" && `Interface down > ${rule.durationSeconds}s`}
+                                    </td>
                                     <td><span className={`severity ${rule.severity.toLowerCase()}`}>{rule.severity}</span></td>
                                     <td>{rule.group?.name ?? "All devices"}</td>
                                     <td>{rule.channels.map((item) => item.channel.name).join(", ") || "None"}</td>
