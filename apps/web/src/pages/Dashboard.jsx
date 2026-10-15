@@ -225,6 +225,8 @@ export default function Dashboard() {
         };
     }, [load]);
 
+const visibleDevices = devices;
+
     async function pollNow() {
         setPolling(true);
         try {
