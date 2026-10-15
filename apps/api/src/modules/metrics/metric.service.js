@@ -222,7 +222,7 @@ class MetricService {
         }));
     }
 
-    async pollStorage(session, deviceId) {
+        async pollStorage(session, deviceId) {
         const [descriptions, units, sizes, used] = await Promise.all([
             this.walkColumn(session, OID.hrStorageDescr),
             this.walkColumn(session, OID.hrStorageAllocationUnits),
@@ -234,36 +234,84 @@ class MetricService {
         const unitMap = map(units);
         const sizeMap = map(sizes);
         const usedMap = map(used);
-        const metrics = [];
-        let memoryFound = false;
-        for (const [index, description] of descriptionMap) {
-            const allocationUnit = Number(unitMap.get(index));
-            const totalUnits = Number(sizeMap.get(index));
-            const usedUnits = Number(usedMap.get(index));
-            if (![allocationUnit, totalUnits, usedUnits].every(Number.isFinite)) continue;
-            const totalBytes = allocationUnit * totalUnits;
-            const usedBytes = allocationUnit * usedUnits;
-            const isMemory = /physical memory|real memory|(^|[^a-z])ram([^a-z]|$)|memory/i.test(description)
-                && !/virtual|swap/i.test(description);
-            if (isMemory && !memoryFound) {
-                memoryFound = true;
-                metrics.push(
-                    makeMetric(deviceId, `${OID.hrStorageSize}.${index}`, "memory.totalBytes", totalBytes, "bytes"),
-                    makeMetric(deviceId, `${OID.hrStorageUsed}.${index}`, "memory.usedBytes", usedBytes, "bytes"),
-                    makeMetric(deviceId, `${OID.hrStorageSize}.${index}`, "memory.freeBytes", Math.max(0, totalBytes - usedBytes), "bytes"),
-                    makeMetric(deviceId, `${OID.hrStorageUsed}.${index}`, "memory.usedPercent", totalBytes ? (usedBytes / totalBytes) * 100 : 0, "percent")
-                );
-            } else if (!isMemory && !/virtual|swap/i.test(description)) {
-                metrics.push(
-                    makeMetric(deviceId, `${OID.hrStorageDescr}.${index}`, `storage.${index}.name`, description),
-                    makeMetric(deviceId, `${OID.hrStorageSize}.${index}`, `storage.${index}.totalBytes`, totalBytes, "bytes"),
-                    makeMetric(deviceId, `${OID.hrStorageUsed}.${index}`, `storage.${index}.usedBytes`, usedBytes, "bytes"),
-                    makeMetric(deviceId, `${OID.hrStorageUsed}.${index}`, `storage.${index}.usedPercent`, totalBytes ? (usedBytes / totalBytes) * 100 : 0, "percent")
-                );
+
+        // SNMP Gauge32 can arrive signed; normalize to unsigned 32-bit.
+        const asUnsigned32 = (value) => {
+            const number = Number(value);
+            if (!Number.isFinite(number)) return null;
+            if (number < 0) return number + 0x100000000;
+            return number;
+        };
+
+        const scoreMemoryDescription = (description) => {
+            const text = String(description || "");
+            if (/virtual|swap|cached|buffers|flash|disk|diskette|cdrom|usb|tmpfs|overlay/i.test(text)) {
+                return -1;
             }
+            if (/physical\s*memory|real\s*memory|main\s*memory/i.test(text)) return 100;
+            if (/(^|[^a-z])ram([^a-z]|$)/i.test(text)) return 80;
+            // Generic "memory" last — avoids wrong first-match on MikroTik labels.
+            if (/memory/i.test(text)) return 20;
+            return -1;
+        };
+
+        const storageRows = [];
+        for (const [index, description] of descriptionMap) {
+            const allocationUnit = asUnsigned32(unitMap.get(index));
+            const totalUnits = asUnsigned32(sizeMap.get(index));
+            const usedUnits = asUnsigned32(usedMap.get(index));
+            if (allocationUnit == null || totalUnits == null || usedUnits == null) continue;
+            if (allocationUnit <= 0 || totalUnits < 0 || usedUnits < 0) continue;
+
+            const totalBytes = allocationUnit * totalUnits;
+            const usedBytes = Math.min(allocationUnit * usedUnits, totalBytes);
+            const usedPercent = totalBytes
+                ? Math.min(100, Math.max(0, (usedBytes / totalBytes) * 100))
+                : 0;
+
+            storageRows.push({
+                index,
+                description: String(description ?? ""),
+                allocationUnit,
+                totalBytes,
+                usedBytes,
+                usedPercent,
+                memoryScore: scoreMemoryDescription(description)
+            });
+        }
+
+        // Prefer highest-scoring memory row with at least 1 MB capacity.
+        const memoryCandidates = storageRows
+            .filter((row) => row.memoryScore > 0 && row.totalBytes >= 1024 * 1024)
+            .sort((left, right) => {
+                if (right.memoryScore !== left.memoryScore) return right.memoryScore - left.memoryScore;
+                return right.totalBytes - left.totalBytes;
+            });
+        const memoryRow = memoryCandidates[0] ?? null;
+
+        const metrics = [];
+        if (memoryRow) {
+            metrics.push(
+                makeMetric(deviceId, `${OID.hrStorageSize}.${memoryRow.index}`, "memory.totalBytes", memoryRow.totalBytes, "bytes"),
+                makeMetric(deviceId, `${OID.hrStorageUsed}.${memoryRow.index}`, "memory.usedBytes", memoryRow.usedBytes, "bytes"),
+                makeMetric(deviceId, `${OID.hrStorageSize}.${memoryRow.index}`, "memory.freeBytes", Math.max(0, memoryRow.totalBytes - memoryRow.usedBytes), "bytes"),
+                makeMetric(deviceId, `${OID.hrStorageUsed}.${memoryRow.index}`, "memory.usedPercent", memoryRow.usedPercent, "percent")
+            );
+        }
+
+        for (const row of storageRows) {
+            if (memoryRow && row.index === memoryRow.index) continue;
+            if (/virtual|swap/i.test(row.description)) continue;
+            metrics.push(
+                makeMetric(deviceId, `${OID.hrStorageDescr}.${row.index}`, `storage.${row.index}.name`, row.description),
+                makeMetric(deviceId, `${OID.hrStorageSize}.${row.index}`, `storage.${row.index}.totalBytes`, row.totalBytes, "bytes"),
+                makeMetric(deviceId, `${OID.hrStorageUsed}.${row.index}`, `storage.${row.index}.usedBytes`, row.usedBytes, "bytes"),
+                makeMetric(deviceId, `${OID.hrStorageUsed}.${row.index}`, `storage.${row.index}.usedPercent`, row.usedPercent, "percent")
+            );
         }
         return metrics;
     }
+
 
     async pollPhysicalInventory(session, deviceId) {
         const physicalFields = [
